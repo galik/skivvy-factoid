@@ -28,7 +28,7 @@ http://www.gnu.org/licenses/gpl-2.0.html
 
 '-----------------------------------------------------------------*/
 
-#include <skivvy/plugin-factoid.h>
+#include <skivvy-factoid/plugin-factoid.h>
 
 #include <ctime>
 #include <cstdlib>
@@ -41,7 +41,7 @@ http://www.gnu.org/licenses/gpl-2.0.html
 #include <skivvy/ios.h>
 #include <skivvy/irc.h>
 
-namespace skivvy { namespace ircbot {
+namespace skivvy { namespace factoid {
 
 IRC_BOT_PLUGIN(FactoidIrcBotPlugin);
 PLUGIN_INFO("factoid", "Factoid", "0.1");
@@ -50,6 +50,7 @@ using namespace skivvy;
 using namespace skivvy::irc;
 using namespace skivvy::types;
 using namespace skivvy::utils;
+using namespace skivvy::ircbot;
 using namespace skivvy::string;
 
 const str STORE_FILE = "factoid.store.file";
@@ -463,4 +464,4 @@ void FactoidIrcBotPlugin::exit()
 
 // INTERFACE: IrcBotMonitor
 
-}} // skivvy::ircbot
+}} // skivvy::factoid

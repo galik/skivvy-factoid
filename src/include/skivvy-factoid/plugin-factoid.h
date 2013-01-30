@@ -38,9 +38,10 @@ http://www.gnu.org/licenses/gpl-2.0.html
 
 #include <skivvy/store.h>
 
-namespace skivvy { namespace ircbot {
+namespace skivvy { namespace factoid {
 
 using namespace skivvy::utils;
+using namespace skivvy::ircbot;
 
 class FactoidIrcBotPlugin
 : public BasicIrcBotPlugin
@@ -82,6 +83,6 @@ public:
 	virtual void exit();
 };
 
-}} // sookee::ircbot
+}} // skivvy::factoid
 
 #endif // _SKIVVY_IRCBOT_FACTOID_H_
