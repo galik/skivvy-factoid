@@ -37,6 +37,7 @@ http://www.gnu.org/licenses/gpl-2.0.html
 #include <mutex>
 
 #include <skivvy/store.h>
+#include <skivvy/plugin-chanops.h>
 
 namespace skivvy { namespace factoid {
 
@@ -52,6 +53,10 @@ private:
 
 	BackupStore store;
 	BackupStore index;
+
+	IrcBotPluginHandle<ChanopsIrcBotPlugin> chanops;
+
+	str get_user(const message& msg);
 
 	bool is_user_valid(const message& msg, const str& svar);
 

@@ -28,7 +28,7 @@ http://www.gnu.org/licenses/gpl-2.0.html
 
 '-----------------------------------------------------------------*/
 
-#include <skivvy-factoid/plugin-factoid.h>
+#include <skivvy/plugin-factoid.h>
 
 #include <ctime>
 #include <cstdlib>
@@ -63,10 +63,21 @@ FactoidIrcBotPlugin::FactoidIrcBotPlugin(IrcBot& bot)
 : BasicIrcBotPlugin(bot)
 , store(bot.getf(STORE_FILE, STORE_FILE_DEFAULT))
 , index(bot.getf(INDEX_FILE, INDEX_FILE_DEFAULT))
+, chanops(bot, "chanops")
 {
 }
 
 FactoidIrcBotPlugin::~FactoidIrcBotPlugin() {}
+
+str FactoidIrcBotPlugin::get_user(const message& msg)
+{
+	bug_func();
+	bug_var(chanops);
+	// chanops user | msg.userhost
+	if(chanops && chanops->is_userhost_logged_in(msg.get_userhost()))
+		return chanops->get_userhost_username(msg.get_userhost());
+	return msg.get_userhost();
+}
 
 bool FactoidIrcBotPlugin::is_user_valid(const message& msg, const str& svar)
 {
@@ -167,6 +178,12 @@ bool FactoidIrcBotPlugin::addfact(const message& msg)
 		param.erase(param.begin()); // eat the optional parameter
 	}
 
+	/*
+	 * TODO: {bug: #24} Add this after adding file format upgrade
+	 * str user = get_user(msg);
+	 * store.add(lowercase(param[0]), user + " " + param[1])
+	 */
+
 	store.add(lowercase(param[0]), param[1]);
 	bot.fc_reply(msg, get_prefix(msg, IRC_Green) + " Fact added to database.");
 
@@ -178,7 +195,6 @@ bool FactoidIrcBotPlugin::findfact(const message& msg)
 	BUG_COMMAND(msg);
 
 	// !findfact *([group1,group2]) <wildcard>"
-
 
 	siss iss(msg.get_user_params());
 
@@ -349,6 +365,13 @@ bool FactoidIrcBotPlugin::fact(const message& msg, const str& key, const str& pr
 		}
 		else
 		{
+			// After {bug: #24 add this:
+//			str line = fact;
+//			if(!sgl(sgl(siss(line), user, ' '), fact))
+//			{
+//				log("factoid: ERROR: Bad format in store: " << line);
+//			}
+
 			// Max of 2 lines in channel
 			if(c < 2)
 				bot.fc_reply(msg, prefix + IRC_BOLD + IRC_COLOR + IRC_Navy_Blue + fact);
@@ -392,6 +415,8 @@ bool FactoidIrcBotPlugin::give(const message& msg)
 
 bool FactoidIrcBotPlugin::initialize()
 {
+	// {bug: #24} update store to ass user
+
 	add
 	({
 		"!addfact"
