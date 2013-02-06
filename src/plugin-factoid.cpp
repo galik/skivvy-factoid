@@ -74,16 +74,16 @@ str FactoidIrcBotPlugin::get_user(const message& msg)
 	bug_func();
 	bug_var(chanops);
 	// chanops user | msg.userhost
-	if(chanops && chanops->is_userhost_logged_in(msg.get_userhost()))
-		return chanops->get_userhost_username(msg.get_userhost());
-	return msg.get_userhost();
+	if(chanops && chanops->is_userhost_logged_in(msg.get_userhost_cp()))
+		return chanops->get_userhost_username(msg.get_userhost_cp());
+	return msg.get_userhost_cp();
 }
 
 bool FactoidIrcBotPlugin::is_user_valid(const message& msg, const str& svar)
 {
 	bug_func();
 	for(const str& r: bot.get_vec(svar))
-		if(bot.preg_match(r, msg.get_userhost()))
+		if(bot.preg_match(r, msg.get_userhost_cp()))
 			return true;
 	return false;
 }
@@ -92,7 +92,7 @@ bool FactoidIrcBotPlugin::is_user_valid(const message& msg, const str& svar)
 
 str get_prefix(const message& msg, const str& color)
 {
-	str cmd = msg.get_user_cmd();
+	str cmd = msg.get_user_cmd_cp();
 	if(!cmd.empty())
 		cmd.erase(0, 1); // loose the '!'
 
@@ -104,7 +104,7 @@ bool FactoidIrcBotPlugin::reloadfacts(const message& msg)
 	BUG_COMMAND(msg);
 
 	if(!is_user_valid(msg, FACT_USER))
-		return bot.cmd_error(msg, msg.get_nick() + " is not authorised to reload facts.");
+		return bot.cmd_error(msg, msg.get_nick_cp() + " is not authorised to reload facts.");
 
 	store.reload();
 	bot.fc_reply(msg, get_prefix(msg, IRC_Red) + " Fact database reloaded.");
@@ -119,7 +119,7 @@ bool FactoidIrcBotPlugin::addgroup(const message& msg)
 	// !addgroup <key> <group>,<group>
 	str_set groups;
 	str key, list, group;
-	siss iss(msg.get_user_params());
+	siss iss(msg.get_user_params_cp());
 
 	ios::getstring(iss, key) >> std::ws;
 
@@ -149,10 +149,10 @@ bool FactoidIrcBotPlugin::addfact(const message& msg)
 	// !addfact *([topic1,topic2]) <key> <fact>"
 
 	if(!is_user_valid(msg, FACT_USER))
-		return bot.cmd_error(msg, msg.get_nick() + " is not authorised to add facts.");
+		return bot.cmd_error(msg, msg.get_nick_cp() + " is not authorised to add facts.");
 
 	str_vec param(3);
-	siss iss(msg.get_user_params());
+	siss iss(msg.get_user_params_cp());
 	ios::getstring(iss, param[0]);
 	ios::getstring(iss, param[1]);
 	ios::getstring(iss, param[2]);
@@ -196,7 +196,7 @@ bool FactoidIrcBotPlugin::findfact(const message& msg)
 
 	// !findfact *([group1,group2]) <wildcard>"
 
-	siss iss(msg.get_user_params());
+	siss iss(msg.get_user_params_cp());
 
 	str_set groups;
 	if(iss.peek() == '[') // groups
@@ -285,7 +285,7 @@ bool FactoidIrcBotPlugin::findgroup(const message& msg)
 		siss iss(index.get(key));
 		str group;
 		while(sgl(iss, group, ','))
-			if(bot.wild_match(msg.get_user_params(), group))
+			if(bot.wild_match(msg.get_user_params_cp(), group))
 				groups.insert(group);
 	}
 
@@ -389,7 +389,7 @@ bool FactoidIrcBotPlugin::fact(const message& msg)
 	BUG_COMMAND(msg);
 
 	// !fact <key>
-	str key = msg.get_user_params();
+	str key = msg.get_user_params_cp();
 	if(trim(key).empty())
 		return bot.cmd_error(msg, "Expected: !fact <key>.");
 	fact(msg, key);
@@ -403,7 +403,7 @@ bool FactoidIrcBotPlugin::give(const message& msg)
 
 	// !give <nick> <key>
 	str nick, key;
-	if(!(std::getline(std::istringstream(msg.get_user_params()) >> nick >> std::ws, key)))
+	if(!(std::getline(std::istringstream(msg.get_user_params_cp()) >> nick >> std::ws, key)))
 		return bot.cmd_error(msg, "Expected: !give <nick> <key>.");
 
 	fact(msg, key, nick + ": " + irc::IRC_BOLD + "(" + key + ") - " + irc::IRC_NORMAL);
