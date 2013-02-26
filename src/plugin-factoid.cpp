@@ -36,9 +36,10 @@ http://www.gnu.org/licenses/gpl-2.0.html
 #include <sstream>
 #include <iostream>
 
+#include <sookee/str.h>
+
 #include <skivvy/logrep.h>
 #include <skivvy/utils.h>
-#include <skivvy/str.h>
 #include <skivvy/ios.h>
 #include <skivvy/irc.h>
 
@@ -52,7 +53,7 @@ using namespace skivvy::irc;
 using namespace skivvy::types;
 using namespace skivvy::utils;
 using namespace skivvy::ircbot;
-using namespace skivvy::string;
+using namespace sookee::string;
 
 const str STORE_FILE = "factoid.store.file";
 const str STORE_FILE_DEFAULT = "factoid-store.txt";
@@ -128,7 +129,7 @@ bool FactoidIrcBotPlugin::addgroup(const message& msg)
 		groups.insert(trim(group));
 
 	iss.clear();
-	iss.str(index.get(lowercase(key)));
+	iss.str(index.get(lower_copy(key)));
 	while(sgl(iss, group, ','))
 		groups.insert(group);
 
@@ -137,7 +138,7 @@ bool FactoidIrcBotPlugin::addgroup(const message& msg)
 	for(const str& group: groups)
 		{ list += sep + group; sep = ","; }
 
-	index.set(lowercase(key), list);
+	index.set(lower_copy(key), list);
 	bot.fc_reply(msg, get_prefix(msg, IRC_Green) + " Fact added to group.");
 
 	return true;
@@ -167,7 +168,7 @@ bool FactoidIrcBotPlugin::addfact(const message& msg)
 
 		while(sgl(siss(list), group, ','))
 			groups.insert(trim(group));
-		while(sgl(siss(index.get(lowercase(param[1]))), group, ','))
+		while(sgl(siss(index.get(lower_copy(param[1]))), group, ','))
 			groups.insert(group);
 
 		str sep;
@@ -175,17 +176,17 @@ bool FactoidIrcBotPlugin::addfact(const message& msg)
 		for(const str& group: groups)
 			{ list += sep + group; sep = ","; }
 
-		index.set(lowercase(param[1]), list);
+		index.set(lower_copy(param[1]), list);
 		param.erase(param.begin()); // eat the optional parameter
 	}
 
 	/*
 	 * TODO: {bug: #24} Add this after adding file format upgrade
 	 * str user = get_user(msg);
-	 * store.add(lowercase(param[0]), user + " " + param[1])
+	 * store.add(lower_copy(param[0]), user + " " + param[1])
 	 */
 
-	store.add(lowercase(param[0]), param[1]);
+	store.add(lower_copy(param[0]), param[1]);
 	bot.fc_reply(msg, get_prefix(msg, IRC_Green) + " Fact added to database.");
 
 	return true;
@@ -218,7 +219,7 @@ bool FactoidIrcBotPlugin::findfact(const message& msg)
 	ios::getstring(iss, key_match);
 	bug_var(key_match);
 
-	str_set keys = store.get_keys_if_wild(lowercase(key_match));
+	str_set keys = store.get_keys_if_wild(lower_copy(key_match));
 
 	if(!groups.empty()) // restrict search to these groups
 	{
@@ -353,7 +354,7 @@ bool FactoidIrcBotPlugin::fact(const message& msg, const str& key, const str& pr
 	BUG_COMMAND(msg);
 
 	// !fact <key>
-	const str_vec facts = store.get_vec(lowercase(key));
+	const str_vec facts = store.get_vec(lower_copy(key));
 	siz c = 0;
 	for(const str& fact: facts)
 	{
