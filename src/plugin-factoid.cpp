@@ -37,6 +37,7 @@ http://www.gnu.org/licenses/gpl-2.0.html
 #include <iostream>
 
 #include <skivvy/logrep.h>
+#include <skivvy/utils.h>
 #include <skivvy/str.h>
 #include <skivvy/ios.h>
 #include <skivvy/irc.h>
