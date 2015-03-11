@@ -35,35 +35,197 @@ http://www.gnu.org/licenses/gpl-2.0.html
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <algorithm>
+
+#include <sookee/str.h>
+#include <sookee/types/basic.h>
+#include <sookee/types/stream.h>
+#include <sookee/ios.h>
 
 #include <skivvy/logrep.h>
-#include <skivvy/str.h>
-#include <skivvy/ios.h>
 #include <skivvy/irc.h>
+#include <skivvy/utils.h>
+
+#include <sookee/bug.h>
+#include <sookee/log.h>
 
 namespace skivvy { namespace factoid {
 
 IRC_BOT_PLUGIN(FactoidIrcBotPlugin);
 PLUGIN_INFO("factoid", "Factoid", "0.1");
 
+using namespace sookee;
+using namespace sookee::bug;
+using namespace sookee::log;
 using namespace skivvy;
 using namespace skivvy::irc;
-using namespace skivvy::types;
+using namespace sookee::types;
 using namespace skivvy::utils;
 using namespace skivvy::ircbot;
-using namespace skivvy::string;
+//using namespace sookee::ios;
+using namespace sookee::utils;
 
 const str STORE_FILE = "factoid.store.file";
 const str STORE_FILE_DEFAULT = "factoid-store.txt";
+
 const str INDEX_FILE = "factoid.index.file";
 const str INDEX_FILE_DEFAULT = "factoid-index.txt";
+
 const str FACT_USER = "factoid.fact.user";
+const str FACT_WILD_USER = "factoid.fact.wild.user";
+const str FACT_PREG_USER = "factoid.fact.preg.user";
+const str FACT_CHANOPS_USERS = "factoid.fact.chanops.users";
+
+/**
+ * Add a fact by keyword and optionally add it to groups.
+ * @param key
+ * @param fact
+ * @param groups
+ * @return
+ */
+void FactoidManager::add_fact(const str& key, const str& fact, const str_set& groups)
+{
+	store.add(key, fact);
+
+	if(!groups.empty())
+	{
+		str_set all_groups = index.get_set(key);
+		all_groups.insert(groups.begin(), groups.end());
+		bug_cnt(all_groups);
+		index.set_from(key, all_groups);
+	}
+}
+
+/**
+ * Delete all facts, or a single fact from a keyword.
+ * @param key
+ * @param line
+ * @param groups
+ * @return
+ */
+bool FactoidManager::del_fact(const str& key, uns line, const str_set& groups)
+{
+	bool kill = groups.empty();
+
+	if(!kill)
+	{
+		str_set current_groups = index.get_set(key);
+
+		for(auto&& g: current_groups)
+			if(groups.find(g) != groups.end())
+				{ kill = true; break; }
+	}
+
+	if(!kill)
+	{
+		error = "fact not found within specified group(s)";
+		return false;
+	}
+
+	str_vec tmps = store.get_vec(key);
+
+	if(line == noline)
+		tmps.clear();
+	else
+	{
+		if(line <= tmps.size())
+			tmps.erase(tmps.begin() + line - 1);
+		else
+		{
+			error = "line number for key '" + key + "' does not exist: " + std::to_string(line);
+			return false;
+		}
+	}
+
+	store.clear(key);
+
+	if(tmps.empty())
+		index.clear(key);
+	else
+		store.set_from(key, tmps);
+
+	return true;
+}
+
+/**
+ * Add keyword to groups.
+ * @param key
+ * @param groups
+ * @return
+ */
+void FactoidManager::add_to_groups(const str& key, const str_set& groups)
+{
+	str_set current_groups = index.get_set(key);
+	current_groups.insert(groups.begin(), groups.end());
+	index.set_from(key, current_groups);
+}
+
+/**
+ * Remove keyword from groups.
+ * @param key
+ * @param groups
+ * @return
+ */
+void FactoidManager::del_from_groups(const str& key, const str_set& groups)
+{
+	str_set current_groups = index.get_set(key);
+	for(auto&& g: groups)
+		current_groups.erase(current_groups.find(g));
+	index.set_from(key, current_groups);
+}
+
+/**
+ * Get a set of kewords that match the wildcard expression
+ * @return
+ */
+str_set FactoidManager::find_fact(const str& wild_key, const str_set& groups)
+{
+	str_set wild_keys = store.get_keys_if_wild(wild_key);
+
+	if(groups.empty())
+		return wild_keys;
+
+	str_set keys;
+
+	for(auto&& k: wild_keys)
+	{
+		for(auto&& g: index.get_set(k))
+			if(groups.find(g) != groups.end())
+				{ keys.insert(k); break; }
+	}
+
+	return keys;
+}
+
+bool wild_match(const str& w, const str& s, int flags = 0)
+{
+	return !fnmatch(w.c_str(), s.c_str(), flags | FNM_EXTMATCH);
+}
+
+/**
+ * Get a set of groups that match the wildcard expression
+ * @return
+ */
+str_set FactoidManager::find_group(const str& wild_group)
+{
+	str_set groups;
+
+	str_set keys = index.get_keys();
+
+	for(auto&& k: keys)
+		for(auto&& g: index.get_set(k))
+			if(wild_match(wild_group, g))
+				groups.insert(g);
+
+	return groups;
+}
 
 FactoidIrcBotPlugin::FactoidIrcBotPlugin(IrcBot& bot)
 : BasicIrcBotPlugin(bot)
 , store(bot.getf(STORE_FILE, STORE_FILE_DEFAULT))
 , index(bot.getf(INDEX_FILE, INDEX_FILE_DEFAULT))
 , chanops(bot, "chanops")
+, fm(store, index)
 {
 }
 
@@ -79,12 +241,24 @@ str FactoidIrcBotPlugin::get_user(const message& msg)
 	return msg.get_userhost();
 }
 
-bool FactoidIrcBotPlugin::is_user_valid(const message& msg, const str& svar)
+bool FactoidIrcBotPlugin::is_user_valid(const message& msg)
 {
-	bug_func();
-	for(const str& r: bot.get_vec(svar))
+//	bug_func();
+
+	// Manual overrides from config file
+	for(const str& r: bot.get_vec(FACT_USER))
+		if(r == msg.get_userhost())
+			return true;
+	for(const str& r: bot.get_vec(FACT_WILD_USER))
+		if(bot.wild_match(r, msg.get_userhost()))
+			return true;
+	for(const str& r: bot.get_vec(FACT_PREG_USER))
 		if(bot.preg_match(r, msg.get_userhost()))
 			return true;
+
+	if(bot.get(FACT_CHANOPS_USERS, false) && chanops)
+		return chanops->is_userhost_logged_in(msg.get_userhost());
+
 	return false;
 }
 
@@ -103,7 +277,7 @@ bool FactoidIrcBotPlugin::reloadfacts(const message& msg)
 {
 	BUG_COMMAND(msg);
 
-	if(!is_user_valid(msg, FACT_USER))
+	if(!is_user_valid(msg))
 		return bot.cmd_error(msg, msg.get_nickname() + " is not authorised to reload facts.");
 
 	store.reload();
@@ -112,32 +286,34 @@ bool FactoidIrcBotPlugin::reloadfacts(const message& msg)
 	return true;
 }
 
+// TODO: make a testable business object for the functionality
+
 bool FactoidIrcBotPlugin::addgroup(const message& msg)
 {
 	BUG_COMMAND(msg);
 
 	// !addgroup <key> <group>,<group>
+	str key;
 	str_set groups;
-	str key, list, group;
 	siss iss(msg.get_user_params());
 
-	ios::getstring(iss, key) >> std::ws;
+	if(!(iss >> key))
+		return reply(msg, "expected <key>", true);
 
-	while(sgl(iss, group, ','))
+	bug_var(key);
+
+	str group;
+	while(sgl(iss >> std::ws, group, ','))
 		groups.insert(trim(group));
 
-	iss.clear();
-	iss.str(index.get(lowercase(key)));
-	while(sgl(iss, group, ','))
-		groups.insert(group);
+	if(groups.empty())
+		return reply(msg, "expected groups <group1>, <group2>, etc...");
 
-	str sep;
-	list.clear();
-	for(const str& group: groups)
-		{ list += sep + group; sep = ","; }
+	bug_cnt(groups);
 
-	index.set(lowercase(key), list);
-	bot.fc_reply(msg, get_prefix(msg, IRC_Green) + " Fact added to group.");
+	fm.add_to_groups(key, groups);
+
+	reply(msg, "Fact added to group.");
 
 	return true;
 }
@@ -148,44 +324,106 @@ bool FactoidIrcBotPlugin::addfact(const message& msg)
 
 	// !addfact *([topic1,topic2]) <key> <fact>"
 
-	if(!is_user_valid(msg, FACT_USER))
+	if(!is_user_valid(msg))
 		return bot.cmd_error(msg, msg.get_nickname() + " is not authorised to add facts.");
 
-	str_vec param(3);
+	str topics, key, fact;
 	siss iss(msg.get_user_params());
-	ios::getstring(iss, param[0]);
-	ios::getstring(iss, param[1]);
-	ios::getstring(iss, param[2]);
 
-	if(!param[0].empty() && param[0][0] == '[') // group
+	// add group
+	str_set groups;
+
+	if(!ios::getnested(iss, topics, '[', ']')) // group
+		iss.clear();
+	else
 	{
-		// add group
-		str_set groups;
 		str list, group;
-		sgl(sgl(siss(param[0]), list, '['), list, ']');
+		sgl(sgl(siss(topics), list, '['), list, ']');
 
-		while(sgl(siss(list), group, ','))
+		bug_var(list);
+
+		siss iss(list);
+		while(sgl(iss, group, ','))
 			groups.insert(trim(group));
-		while(sgl(siss(index.get(lowercase(param[1]))), group, ','))
-			groups.insert(group);
-
-		str sep;
-		list.clear();
-		for(const str& group: groups)
-			{ list += sep + group; sep = ","; }
-
-		index.set(lowercase(param[1]), list);
-		param.erase(param.begin()); // eat the optional parameter
 	}
 
-	/*
-	 * TODO: {bug: #24} Add this after adding file format upgrade
-	 * str user = get_user(msg);
-	 * store.add(lowercase(param[0]), user + " " + param[1])
-	 */
+	sgl(iss >> key >> std::ws, fact);
+	if(trim(fact).empty())
+		return reply(msg, "Empty fact rejected.", true);
 
-	store.add(lowercase(param[0]), param[1]);
-	bot.fc_reply(msg, get_prefix(msg, IRC_Green) + " Fact added to database.");
+	bug_var(key);
+	bug_var(fact);
+	bug_cnt(groups);
+
+	fm.add_fact(key, fact, groups);
+
+	reply(msg, "Fact added to database.");
+
+	return true;
+}
+
+bool FactoidIrcBotPlugin::reply(const message& msg, const str& text, bool error)
+{
+	const str col = error ? IRC_Red : IRC_Green;
+	bot.fc_reply(msg, get_prefix(msg, col) + " " + text);
+	return true;
+}
+
+bool FactoidIrcBotPlugin::delfact(const message& msg)
+{
+	BUG_COMMAND(msg);
+
+	// !delfact *([topic1,topic2]) <key> ?(#<idx>)"
+
+	if(!is_user_valid(msg))
+		return bot.cmd_error(msg, msg.get_nickname() + " is not authorised to edit facts.");
+
+	str topics, key, idx;
+	siss iss(msg.get_user_params());
+
+	// add group
+	str_set groups;
+
+	if(!ios::getnested(iss, topics, '[', ']')) // group
+		iss.clear();
+	else
+	{
+		str list, group;
+		sgl(sgl(siss(topics), list, '['), list, ']');
+
+		bug_var(list);
+
+		siss iss(list);
+		while(sgl(iss, group, ','))
+			groups.insert(trim(group));
+	}
+
+	if(!(iss >> key))
+	{
+		log("ERROR: parameters needed");
+		return true;
+	}
+
+	uns line_number = FactoidManager::noline; // -1 == all lines
+
+	iss >> idx; // #n where n > 0
+	if(!idx.empty() && (idx[0] != '#' || !(siss(idx).ignore() >> line_number) || !line_number))
+	{
+		reply(msg, "bad line number: " + idx);
+		return true;
+	}
+
+	bug_var(key);
+	bug_var(line_number);
+	bug_var(groups.empty());
+
+	if(!fm.del_fact(key, line_number, groups))
+		return reply(msg, fm.error, true);
+
+	if(line_number != FactoidManager::noline)
+		reply(msg, "Fact removed.");
+	else
+		reply(msg, "Line " + std::to_string(line_number - 1) + " removed.");
 
 	return true;
 }
@@ -201,9 +439,9 @@ bool FactoidIrcBotPlugin::findfact(const message& msg)
 	str_set groups;
 	if(iss.peek() == '[') // groups
 	{
+		iss.ignore();
 		str list; // groups
-		sgl(sgl(iss, list, '['), list, ']');
-//		sgl(sgl(iss, list, '['), list, ']');
+		sgl(iss, list, ']');
 		siss iss(list);
 		str group;
 		while(sgl(iss, group, ','))
@@ -214,46 +452,30 @@ bool FactoidIrcBotPlugin::findfact(const message& msg)
 	}
 
 	str key_match;
-	ios::getstring(iss, key_match);
+	sgl(iss, key_match);
+
+	if(trim(key_match).empty())
+		return reply(msg, "Empty key rejected.");
+
 	bug_var(key_match);
 
-	str_set keys = store.get_keys_if_wild(lowercase(key_match));
-
-	if(!groups.empty()) // restrict search to these groups
-	{
-		for(auto ki = keys.cbegin(); ki != keys.cend();)
-//		for(const str& key: keys)
-		{
-			siss iss(index.get(*ki));
-			str group;
-			siz c = 0;
-			while(sgl(iss, group, ','))
-			{
-				bug_var(group);
-				if(groups.find(group) != groups.end())
-					++c;
-			}
-			bug_var(c);
-			if(c)
-				++ki;
-			else
-				ki = keys.erase(ki);
-		}
-	}
+	str_set keys = fm.find_fact(key_match, groups);
 
 	if(keys.empty())
-		bot.fc_reply(msg, get_prefix(msg, IRC_Dark_Gray) + "No results.");
-	else
-	{
-		if(keys.size() > 20)
-			bot.fc_reply(msg, get_prefix(msg, IRC_Dark_Gray) + "Too many results, printing the first 20.");
+		return reply(msg, "No results.", true);
 
-		str line, sep;
-		siz c = 20;
-		for(const str& key: keys) // TODO: filter out aliases here ?
-			{ line += sep + "'" + key + "'"; sep = ", "; if(!--c) break; }
-		bot.fc_reply(msg, get_prefix(msg, IRC_Dark_Gray) + line);
+	if(keys.size() > 20)
+	{
+		uns max = bot.get("factoid.max.results", 20U);
+		reply(msg, "Too many results, printing the first " + std::to_string(max) + ".");
+		keys.erase(std::next(keys.begin(), max));
 	}
+
+	str line, sep;
+	for(const str& key: keys) // TODO: filter out aliases here ?
+		{ line += sep + "'" + key + "'"; sep = ", "; }
+
+	reply(msg, line);
 
 	return true;
 }
@@ -277,32 +499,29 @@ bool FactoidIrcBotPlugin::findgroup(const message& msg)
 
 	//  !fg <wildcard>
 
-	str_set groups;
-	str_set keys = index.get_keys();
+	siss iss(msg.get_user_params());
 
-	for(const str& key: keys)
-	{
-		siss iss(index.get(key));
-		str group;
-		while(sgl(iss, group, ','))
-			if(bot.wild_match(msg.get_user_params(), group))
-				groups.insert(group);
-	}
+	str wild_group;
+	if(!sgl(iss, wild_group) || trim(wild_group).empty())
+		return reply(msg, "expected wildcard group expression", true);
 
+	str_set groups = fm.find_group(wild_group);
 
 	if(groups.empty())
-		bot.fc_reply(msg, get_prefix(msg, IRC_Dark_Gray) + "No results.");
-	else
-	{
-		if(groups.size() > 20)
-			bot.fc_reply(msg, get_prefix(msg, IRC_Dark_Gray) + "Too many results, printing the first 20.");
+		return reply(msg, "No results.", true);
 
-		str line, sep;
-		siz c = 20;
-		for(const str& group: groups)
-			{ line += sep + group; sep = ", "; if(!--c) break; }
-		bot.fc_reply(msg, get_prefix(msg, IRC_Dark_Gray) + line);
+	if(groups.size() > 20)
+	{
+		uns max = bot.get("factoid.max.results", 20U);
+		reply(msg, "Too many results, printing the first " + std::to_string(max) + ".");
+		groups.erase(std::next(groups.begin(), max));
 	}
+
+	str line, sep;
+	for(const str& key: groups)
+		{ line += sep + "'" + key + "'"; sep = ", "; }
+
+	reply(msg, line);
 
 	return true;
 }
@@ -352,28 +571,26 @@ bool FactoidIrcBotPlugin::fact(const message& msg, const str& key, const str& pr
 	BUG_COMMAND(msg);
 
 	// !fact <key>
-	const str_vec facts = store.get_vec(lowercase(key));
+	const str_vec facts = store.get_vec(lower_copy(key));
 	siz c = 0;
-	for(const str& fact: facts)
+	for(const str& entry: facts)
 	{
-		if(!fact.empty() && fact[0] == '=')
+		str fact, user;
+		std::time_t time;
+
+		sgl(siss(entry) >> time >> user >> std::ws, fact);
+
+		if(!trim(fact).empty() && fact[0] == '=')
 		{
 			// follow a fact alias link: <fact2>: = <fact1>
 			str key;
-			std::getline(std::istringstream(fact).ignore() >> std::ws, key);
+			sgl(siss(fact).ignore() >> std::ws, key);
 			this->fact(msg, key, prefix);
 		}
 		else
 		{
-			// After {bug: #24 add this:
-//			str line = fact;
-//			if(!sgl(sgl(siss(line), user, ' '), fact))
-//			{
-//				log("factoid: ERROR: Bad format in store: " << line);
-//			}
-
 			// Max of 2 lines in channel
-			if(c < 2)
+			if(c < bot.get("factoid.max.lines", 2U))
 				bot.fc_reply(msg, prefix + IRC_BOLD + IRC_COLOR + IRC_Navy_Blue + fact);
 			else
 				bot.fc_reply_pm(msg, prefix + IRC_BOLD + IRC_COLOR + IRC_Navy_Blue + fact);
@@ -403,7 +620,7 @@ bool FactoidIrcBotPlugin::give(const message& msg)
 
 	// !give <nick> <key>
 	str nick, key;
-	if(!(std::getline(std::istringstream(msg.get_user_params()) >> nick >> std::ws, key)))
+	if(!(sgl(siss(msg.get_user_params()) >> nick >> std::ws, key)))
 		return bot.cmd_error(msg, "Expected: !give <nick> <key>.");
 
 	fact(msg, key, nick + ": " + irc::IRC_BOLD + "(" + key + ") - " + irc::IRC_NORMAL);
@@ -420,8 +637,14 @@ bool FactoidIrcBotPlugin::initialize()
 	add
 	({
 		"!addfact"
-		, "!addfact <key> \"<fact>\" - Display key fact."
+		, "!addfact *([topic1,topic2]) <key> \"<fact>\" - Display key fact."
 		, [&](const message& msg){ addfact(msg); }
+	});
+	add
+	({
+		"!delfact"
+		, "!delfact *([topic1,topic2]) <key> ?(#n) - Delete fact or single line from fact."
+		, [&](const message& msg){ delfact(msg); }
 	});
 	add
 	({
