@@ -38,6 +38,7 @@ AX_CXX_COMPILE_STDCXX_11([noext],[mandatory])
 
 PKG_CHECK_MODULES([SOOKEE], [libsookee])
 PKG_CHECK_MODULES([SKIVVY], [libskivvy])
+PKG_CHECK_MODULES([PCRECPP], [libpcrecpp])
 
 AC_CONFIG_MACRO_DIR([m4])
 

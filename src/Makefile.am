@@ -26,8 +26,6 @@ plugin_librarydir = $(libdir)/skivvy
 plugin_manualsdir = $(mandir)/skivvy
 
 DEF_FLAGS = \
-	-D _GLIBCXX_USE_NANOSLEEP \
-	-D _GLIBCXX_USE_SCHED_YIELD \
 	-D STAMP=\"$(shell date +%Y%m%d-%H%M%S)\" \
 	-D DEV=\"$(shell git diff --quiet || echo -dev)\" \
 	-D COMMITS=\"$(shell printf %04d \"$(git log --after={yesterday} --pretty=oneline|wc -l)\")\" \
@@ -48,11 +46,18 @@ plugin_include_HEADERS = \
 	
 plugin_library_LTLIBRARIES =  \
 	skivvy-plugin-factoid.la
+	
+#noinst_PROGRAMS = \
+#	test
 
 # IrcBot plugins
 skivvy_plugin_factoid_la_SOURCES = plugin-factoid.cpp
 skivvy_plugin_factoid_la_LDFLAGS = -module -avoid-version $(PLUGIN_FLAGS)
 skivvy_plugin_factoid_la_LIBADD =  $(SOOKEE_LIBS) $(SKIVVY_LIBS) -L.libs
+
+#test_SOURCES = test.cpp
+#test_LDFLAGS = -module -avoid-version $(PLUGIN_FLAGS)
+#test_LDADD =  $(SOOKEE_LIBS) $(SKIVVY_LIBS) -L.libs $(PCRECPP_LIBS)
 
 plugin_manuals_DATA = $(top_srcdir)/docs/factoid-manual.text
 

@@ -37,7 +37,7 @@ http://www.gnu.org/licenses/gpl-2.0.html
 #include <mutex>
 
 #include <skivvy/store.h>
-#include <skivvy/plugin-chanops.h>
+//#include <skivvy/plugin-chanops.h>
 
 namespace skivvy { namespace factoid {
 
@@ -48,16 +48,22 @@ using namespace skivvy::ircbot;
 
 class FactoidManager
 {
-	BackupStore& store;
-	BackupStore& index;
+	BackupStore store;
+	BackupStore index;
 
 public:
 	static const uns noline = uns(-1);
 
 	str error;
 
-	FactoidManager(BackupStore& store, BackupStore& index)
-	: store(store), index(index) {}
+	FactoidManager(const str& store_file, const str& index_file);
+
+	bool reload()
+	{
+		store.reload();
+		index.reload();
+		return true;
+	}
 
 	/**
 	 * Add a fact by keyword and optionally add it to groups.
@@ -89,7 +95,6 @@ public:
 	 * Remove keyword from groups.
 	 * @param key
 	 * @param groups
-	 * @return
 	 */
 	void del_from_groups(const str& key, const str_set& groups);
 
@@ -104,6 +109,15 @@ public:
 	 * @return
 	 */
 	str_set find_group(const str& wild_group);
+
+	/**
+	 * Retrieve all facts for key optionally restricted by groups..
+	 * @param key The key of the facts to retrieve
+	 * @param groups If not empty redtrict fact search to these groups.
+	 * @return str_vec of facts
+	 */
+	str_vec get_fact(const str& key, const str_set& groups);
+
 };
 
 class FactoidIrcBotPlugin
@@ -113,10 +127,7 @@ public:
 
 private:
 
-	BackupStore store;
-	BackupStore index;
-
-	IrcBotPluginHandle<ChanopsIrcBotPlugin> chanops;
+	IrcBotPluginHandle chanops;
 
 	FactoidManager fm;
 
@@ -133,7 +144,7 @@ private:
 	bool findfact(const message& msg); // !fs
 	bool findgroup(const message& msg); // !fs
 
-	bool fact(const message& msg, const str& key, const str& prefix = "");
+	bool fact(const message& msg, const str& key, const str_set& groups, const str& prefix = "");
 	bool fact(const message& msg);
 	bool give(const message& msg);
 
