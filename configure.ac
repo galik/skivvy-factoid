@@ -34,11 +34,11 @@ AC_PROG_CXX
 AC_PROG_INSTALL
 
 AC_LANG(C++)
-AX_CXX_COMPILE_STDCXX_11([noext],[mandatory])
+AX_CXX_COMPILE_STDCXX_14([noext],[mandatory])
 
 PKG_CHECK_MODULES([SOOKEE], [libsookee])
 PKG_CHECK_MODULES([SKIVVY], [libskivvy])
-PKG_CHECK_MODULES([PCRECPP], [libpcrecpp])
+#PKG_CHECK_MODULES([PCRECPP], [libpcrecpp])
 
 AC_CONFIG_MACRO_DIR([m4])
 

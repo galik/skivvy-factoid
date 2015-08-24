@@ -671,7 +671,7 @@ bool FactoidIrcBotPlugin::fact(const message& msg)
 	if(trim(key).empty())
 		return bot.cmd_error(msg, "Expected: !fact <key>.");
 	else
-		fact(msg, lower(key), groups);
+		fact(msg, lower(key), groups, get_prefix(msg, IRC_Aqua_Light));
 
 	return true;
 }
