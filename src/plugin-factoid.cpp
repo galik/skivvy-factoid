@@ -255,7 +255,7 @@ FactoidIrcBotPlugin::~FactoidIrcBotPlugin() {}
 
 str FactoidIrcBotPlugin::get_user(const message& msg)
 {
-	bug_func();
+	bug_fun();
 	bug_var(chanops);
 	// chanops user | msg.userhost
 
@@ -271,7 +271,7 @@ str FactoidIrcBotPlugin::get_user(const message& msg)
 
 bool FactoidIrcBotPlugin::is_user_valid(const message& msg)
 {
-//	bug_func();
+//	bug_fun();
 
 	// Manual overrides from config file
 	for(const str& r: bot.get_vec(FACT_USER))
@@ -797,7 +797,7 @@ str FactoidIrcBotPlugin::get_version() const { return VERSION; }
 
 void FactoidIrcBotPlugin::exit()
 {
-//	bug_func();
+//	bug_fun();
 }
 
 // INTERFACE: IrcBotMonitor
