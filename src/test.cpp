@@ -30,5 +30,8 @@ http://www.gnu.org/licenses/gpl-2.0.html
 
 int main()
 {
+	skivvy::factoid::FactoidManager fm("test/store.txt", "test/index.txt");
 
+	fm.add_fact("k01", "fact 1", {"g01", "g02"});
+	fm.add_to_groups("k01", {"g3", "g4"});
 }

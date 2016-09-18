@@ -48,6 +48,13 @@ http://www.gnu.org/licenses/gpl-2.0.html
 #include <sookee/bug.h>
 #include <sookee/log.h>
 
+#define throw_error(msg) \
+	do { \
+		std::ostringstream oss; \
+		oss << msg; \
+		throw std::runtime_error(oss.str()); \
+	}while(0)
+
 namespace skivvy { namespace factoid {
 
 IRC_BOT_PLUGIN(FactoidIrcBotPlugin);
@@ -75,6 +82,8 @@ const str FACT_WILD_USER = "factoid.fact.wild.user";
 const str FACT_PREG_USER = "factoid.fact.preg.user";
 const str FACT_CHANOPS_USERS = "factoid.fact.chanops.users";
 
+const str FACT_CHANNEL_GROUP = "factoid.channel.group";
+
 FactoidManager::FactoidManager(const str& store_file, const str& index_file)
 : store(store_file)
 , index(index_file)
@@ -93,18 +102,26 @@ void FactoidManager::add_fact(const str& key, const str& fact, const str_set& gr
 	store.add(key, fact);
 
 	if(!groups.empty())
-	{
-		str_set all_groups = index.get_set(key);
-		all_groups.insert(groups.begin(), groups.end());
-		bug_cnt(all_groups);
-		index.set_from(key, all_groups);
-	}
+		add_to_groups(key, groups);
+}
+
+/**
+ * Add keyword to groups.
+ * @param key
+ * @param groups
+ * @return
+ */
+void FactoidManager::add_to_groups(const str& key, const str_set& groups)
+{
+	str_set current_groups = index.get_set(key);
+	current_groups.insert(groups.begin(), groups.end());
+	index.set_from(key, current_groups);
 }
 
 /**
  * Delete all facts, or a single fact from a keyword.
  * @param key
- * @param line
+ * @param line Line number of (multi-line) fact to delete (noline -> delete all lines)
  * @param groups
  * @return
  */
@@ -131,17 +148,13 @@ bool FactoidManager::del_fact(const str& key, uns line, const str_set& groups)
 
 	if(line == noline)
 		tmps.clear();
+	else if(line <= tmps.size())
+		tmps.erase(tmps.begin() + line - 1);
 	else
 	{
-		if(line <= tmps.size())
-			tmps.erase(tmps.begin() + line - 1);
-		else
-		{
-			error = "line number for key '" + key + "' does not exist: " + std::to_string(line);
-			return false;
-		}
+		error = "line number for key '" + key + "' does not exist: " + std::to_string(line);
+		return false;
 	}
-
 	store.clear(key);
 
 	if(tmps.empty())
@@ -150,19 +163,6 @@ bool FactoidManager::del_fact(const str& key, uns line, const str_set& groups)
 		store.set_from(key, tmps);
 
 	return true;
-}
-
-/**
- * Add keyword to groups.
- * @param key
- * @param groups
- * @return
- */
-void FactoidManager::add_to_groups(const str& key, const str_set& groups)
-{
-	str_set current_groups = index.get_set(key);
-	current_groups.insert(groups.begin(), groups.end());
-	index.set_from(key, current_groups);
 }
 
 /**
@@ -180,7 +180,7 @@ void FactoidManager::del_from_groups(const str& key, const str_set& groups)
 }
 
 /**
- * Get a set of kewords that match the wildcard expression
+ * Get a set of keywords that match the wildcard expression
  * @return
  */
 str_set FactoidManager::find_fact(const str& wild_key, const str_set& groups)
@@ -300,7 +300,7 @@ str get_prefix(const message& msg, const str& color)
 	return IRC_BOLD + IRC_COLOR + color + cmd + ": " + IRC_NORMAL;
 }
 
-bool FactoidIrcBotPlugin::reloadfacts(const message& msg)
+bool FactoidIrcBotPlugin::reloadfacts(const message& msg, FactoidManager& fm)
 {
 	BUG_COMMAND(msg);
 
@@ -319,7 +319,7 @@ bool FactoidIrcBotPlugin::reloadfacts(const message& msg)
 
 // TODO: make a testable business object for the functionality
 
-bool FactoidIrcBotPlugin::addgroup(const message& msg)
+bool FactoidIrcBotPlugin::addgroup(const message& msg, FactoidManager& fm)
 {
 	BUG_COMMAND(msg);
 
@@ -349,7 +349,7 @@ bool FactoidIrcBotPlugin::addgroup(const message& msg)
 	return true;
 }
 
-bool FactoidIrcBotPlugin::addfact(const message& msg)
+bool FactoidIrcBotPlugin::addfact(const message& msg, FactoidManager& fm)
 {
 	BUG_COMMAND(msg);
 
@@ -400,7 +400,7 @@ bool FactoidIrcBotPlugin::reply(const message& msg, const str& text, bool error)
 	return true;
 }
 
-bool FactoidIrcBotPlugin::delfact(const message& msg)
+bool FactoidIrcBotPlugin::delfact(const message& msg, FactoidManager& fm)
 {
 	BUG_COMMAND(msg);
 
@@ -459,7 +459,7 @@ bool FactoidIrcBotPlugin::delfact(const message& msg)
 	return true;
 }
 
-bool FactoidIrcBotPlugin::findfact(const message& msg)
+bool FactoidIrcBotPlugin::findfact(const message& msg, FactoidManager& fm)
 {
 	BUG_COMMAND(msg);
 
@@ -524,7 +524,7 @@ str_vec split_list(const str& list, char delim = ',')
 	return split;
 }
 
-bool FactoidIrcBotPlugin::findgroup(const message& msg)
+bool FactoidIrcBotPlugin::findgroup(const message& msg, FactoidManager& fm)
 {
 	BUG_COMMAND(msg);
 
@@ -597,7 +597,7 @@ str_set get_topics_from_fact(const str& fact)
 	return topics;
 }
 
-bool FactoidIrcBotPlugin::fact(const message& msg, const str& key, const str_set& groups, const str& prefix)
+bool FactoidIrcBotPlugin::fact(const message& msg, FactoidManager& fm, const str& key, const str_set& groups, const str& prefix)
 {
 	BUG_COMMAND(msg);
 
@@ -620,7 +620,7 @@ bool FactoidIrcBotPlugin::fact(const message& msg, const str& key, const str_set
 			// follow a fact alias link: <fact2>: = <fact1>
 			str key;
 			sgl(siss(fact).ignore() >> std::ws, key);
-			this->fact(msg, key, groups, prefix);
+			this->fact(msg, fm, key, groups, prefix);
 		}
 		else
 		{
@@ -642,7 +642,7 @@ bool FactoidIrcBotPlugin::fact(const message& msg, const str& key, const str_set
 	return true;
 }
 
-bool FactoidIrcBotPlugin::fact(const message& msg)
+bool FactoidIrcBotPlugin::fact(const message& msg, FactoidManager& fm)
 {
 	BUG_COMMAND(msg);
 
@@ -671,12 +671,12 @@ bool FactoidIrcBotPlugin::fact(const message& msg)
 	if(trim(key).empty())
 		return bot.cmd_error(msg, "Expected: !fact <key>.");
 	else
-		fact(msg, lower(key), groups, get_prefix(msg, IRC_Aqua_Light));
+		fact(msg, fm, lower(key), groups, get_prefix(msg, IRC_Aqua_Light));
 
 	return true;
 }
 
-bool FactoidIrcBotPlugin::give(const message& msg)
+bool FactoidIrcBotPlugin::give(const message& msg, FactoidManager& fm)
 {
 	BUG_COMMAND(msg);
 
@@ -707,9 +707,15 @@ bool FactoidIrcBotPlugin::give(const message& msg)
 	if(!sgl(iss >> std::ws, key) || trim(key).empty())
 		return bot.cmd_error(msg, "Expected: !give <nick> *[group1, group2] <key>.");
 
-	fact(msg, lower(key), groups, nick + ": " + irc::IRC_BOLD + "(" + key + ") - " + irc::IRC_NORMAL);
+	fact(msg, fm, lower(key), groups, nick + ": " + irc::IRC_BOLD + "(" + key + ") - " + irc::IRC_NORMAL);
 
 	return true;
+}
+
+FactoidManager& FactoidIrcBotPlugin::select_fm(const message& msg)
+{
+	auto found = fms.find(msg.get_chan());
+	return found != fms.end() ? *found->second : this->fm;
 }
 
 // INTERFACE: BasicIrcBotPlugin
@@ -718,71 +724,95 @@ bool FactoidIrcBotPlugin::initialize()
 {
 	// {bug: #24} update store to ass user
 
+	str_set unique_check;
+	for(auto const& channels: bot.get_vec(FACT_CHANNEL_GROUP))
+	{
+		siss iss(channels);
+		str channel;
+		while(iss >> channel)
+		{
+			if(!unique_check.insert(channel).second)
+				continue;
+
+			auto store_root = channel + "-" + bot.get(STORE_FILE, STORE_FILE_DEFAULT);
+			auto index_root = channel + "-" + bot.get(INDEX_FILE, INDEX_FILE_DEFAULT);
+
+			auto store_file = bot.getf("none", store_root);
+			auto index_file = bot.getf("none", index_root);
+
+			fms[channel] = std::make_shared<FactoidManager>(store_file, index_file);
+
+			auto primary = channel;
+			while(iss >> channel)
+				fms.emplace(channel, fms[primary]);
+		}
+	}
+
 	add
 	({
 		"!addfact"
-		, "!addfact [group1,group2]? <key> \"<fact>\" - Display key fact."
-		, [&](const message& msg){ addfact(msg); }
+		, "[<group1>(,<group2>)*]? <key> \"<fact>\" - Display key fact optionally restricted by group(s)."
+		, [&](const message& msg){ addfact(msg, select_fm(msg)); }
 	});
 	add
 	({
 		"!delfact"
-		, "!delfact [<group1>(,<group2>)*]? <key> ?(#n) - Delete fact or single line from fact."
-		, [&](const message& msg){ delfact(msg); }
+		, "[<group1>(,<group2>)*]? <key> ?(#n) - Delete fact or single line from fact."
+		, [&](const message& msg){ delfact(msg, select_fm(msg)); }
 	});
 	add
 	({
 		"!addgroup"
-		, "!addgroup <key> <group>(,<group>)* - Add key to groups."
-		, [&](const message& msg){ addgroup(msg); }
+		, "<key> <group1>(,<group2>)* - Add key to groups."
+		, [&](const message& msg){ addgroup(msg, select_fm(msg)); }
 	});
 	add
 	({
 		"!findfact"
-		, "!findfact [<group1>(,<group2>)*]? <wildcard> - Get a list of matching fact keys."
-		, [&](const message& msg){ findfact(msg); }
+		, "[<group1>(,<group2>)*]? <wildcard> - Get a list of matching fact keys."
+		, [&](const message& msg){ findfact(msg, select_fm(msg)); }
 	});
 	add
 	({
 		"!ff"
-		, "!ff - alias for !findfact."
-		, [&](const message& msg){ findfact(msg); }
+		, "=!findfact."
+		, [&](const message& msg){ findfact(msg, select_fm(msg)); }
 	});
 	add
 	({
 		"!findgroup"
-		, "!findgroup <wildcard> - Get a list of matching groups."
-		, [&](const message& msg){ findgroup(msg); }
+		, "<wildcard> - Get a list of matching groups."
+		, [&](const message& msg){ findgroup(msg, select_fm(msg)); }
 	});
 	add
 	({
 		"!fg"
-		, "!fg - alias for !findgroup."
-		, [&](const message& msg){ findgroup(msg); }
+		, "=!findgroup."
+		, [&](const message& msg){ findgroup(msg, select_fm(msg)); }
 	});
 	add
 	({
 		"!fact"
-		, "!fact [<group1>(,<group2>)*]? <key> - Display key fact."
-		, [&](const message& msg){ fact(msg); }
+		, "[<group1>(,<group2>)*]? <key> - Display key fact."
+		, [&](const message& msg){ fact(msg, select_fm(msg)); }
 	});
 	add
 	({
 		"!f"
-		, "!f - alias for !fact."
-		, [&](const message& msg){ fact(msg); }
+		, "=!fact."
+		, [&](const message& msg){ fact(msg, select_fm(msg)); }
 	});
 	add
 	({
 		"!give"
-		, "!give <nick> <key> - Display fact highlighting <nick>."
-		, [&](const message& msg){ give(msg); }
+		, "<nick> <key> - Display fact highlighting <nick>."
+		, [&](const message& msg){ give(msg, select_fm(msg)); }
 	});
 	add
 	({
 		"!reloadfacts"
-		, "!reloadfacts - Reload fact database."
-		, [&](const message& msg){ reloadfacts(msg); }
+		, "Reload fact database."
+		, [&](const message& msg){ reloadfacts(msg, select_fm(msg)); }
 //		, action::INVISIBLE
 	});
 //	bot.add_monitor(*this);

@@ -47,17 +47,17 @@ plugin_include_HEADERS = \
 plugin_library_LTLIBRARIES =  \
 	skivvy-plugin-factoid.la
 	
-#noinst_PROGRAMS = \
-#	test
+noinst_PROGRAMS = \
+	test
 
 # IrcBot plugins
 skivvy_plugin_factoid_la_SOURCES = plugin-factoid.cpp
 skivvy_plugin_factoid_la_LDFLAGS = -module -avoid-version $(PLUGIN_FLAGS)
 skivvy_plugin_factoid_la_LIBADD =  $(SOOKEE_LIBS) $(SKIVVY_LIBS) -L.libs
 
-#test_SOURCES = test.cpp
+test_SOURCES = test.cpp
 #test_LDFLAGS = -module -avoid-version $(PLUGIN_FLAGS)
-#test_LDADD =  $(SOOKEE_LIBS) $(SKIVVY_LIBS) -L.libs $(PCRECPP_LIBS)
+test_LDADD =  $(SOOKEE_LIBS) $(SKIVVY_LIBS) -L.libs .libs/skivvy-plugin-factoid.so
 
 plugin_manuals_DATA = $(top_srcdir)/docs/factoid-manual.text
 

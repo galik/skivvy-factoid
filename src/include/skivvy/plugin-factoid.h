@@ -56,6 +56,9 @@ public:
 
 	str error;
 
+	FactoidManager(FactoidManager&& fm)
+	: store(std::move(fm.store)), index(std::move(fm.index)) {}
+
 	FactoidManager(const str& store_file, const str& index_file);
 
 	bool reload()
@@ -127,26 +130,31 @@ public:
 
 private:
 
+	using FactoidManagerSptr = std::shared_ptr<FactoidManager>;
+
 	IrcBotPluginHandle chanops;
 
 	FactoidManager fm;
+	std::map<str, FactoidManagerSptr> fms; // channel exclusive factoids
+
+	FactoidManager& select_fm(const message& msg);
 
 	str get_user(const message& msg);
 
 	bool is_user_valid(const message& msg);
 
-	bool reloadfacts(const message& msg);
-	bool addgroup(const message& msg);
-	bool addfact(const message& msg);
-	bool delfact(const message& msg);
+	bool reloadfacts(const message& msg, FactoidManager& fm);
+	bool addgroup(const message& msg, FactoidManager& fm);
+	bool addfact(const message& msg, FactoidManager& fm);
+	bool delfact(const message& msg, FactoidManager& fm);
 //	bool addtopic(const message& msg);
 
-	bool findfact(const message& msg); // !fs
-	bool findgroup(const message& msg); // !fs
+	bool findfact(const message& msg, FactoidManager& fm); // !fs
+	bool findgroup(const message& msg, FactoidManager& fm); // !fs
 
-	bool fact(const message& msg, const str& key, const str_set& groups, const str& prefix = "");
-	bool fact(const message& msg);
-	bool give(const message& msg);
+	bool fact(const message& msg, FactoidManager& fm, const str& key, const str_set& groups, const str& prefix = "");
+	bool fact(const message& msg, FactoidManager& fm);
+	bool give(const message& msg, FactoidManager& fm);
 
 	bool reply(const message& msg, const str& text, bool error = false);
 
