@@ -21,7 +21,7 @@
 # 
 # '-----------------------------------------------------------------*/
 
-AC_INIT([skivvy-factoid],[0.1],[oaskivvy@gmail.com],[skivvy-factoid])
+AC_INIT([skivvy-factoid],[0.6.0],[oaskivvy@gmail.com],[skivvy-factoid])
 AC_CONFIG_AUX_DIR([aux-bits])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_SRCDIR([src/plugin-factoid.cpp])
