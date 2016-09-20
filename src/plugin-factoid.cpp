@@ -36,17 +36,16 @@ http://www.gnu.org/licenses/gpl-2.0.html
 #include <iostream>
 #include <algorithm>
 
-#include <sookee/str.h>
-#include <sookee/types/basic.h>
-#include <sookee/types/stream.h>
-#include <sookee/ios.h>
+#include <hol/string_utils.h>
+#include <hol/small_types.h>
+//#include <sookee/ios.h>
 
 #include <skivvy/logrep.h>
 #include <skivvy/irc.h>
 #include <skivvy/utils.h>
 
-#include <sookee/bug.h>
-#include <sookee/log.h>
+#include <hol/bug.h>
+#include <hol/simple_logger.h>
 
 #define throw_error(msg) \
 	do { \
@@ -55,21 +54,23 @@ http://www.gnu.org/licenses/gpl-2.0.html
 		throw std::runtime_error(oss.str()); \
 	}while(0)
 
-namespace skivvy { namespace factoid {
+#define log(m) LOG::I << m
+
+namespace skivvy {
+namespace ircbot {
+namespace factoid {
 
 IRC_BOT_PLUGIN(FactoidIrcBotPlugin);
 PLUGIN_INFO("factoid", "Factoid", "0.1");
 
-using namespace sookee;
-using namespace sookee::bug;
-using namespace sookee::log;
+using namespace hol::simple_logger;
 using namespace skivvy;
 using namespace skivvy::irc;
-using namespace sookee::types;
+using namespace hol::small_types::basic;
 using namespace skivvy::utils;
 using namespace skivvy::ircbot;
+using namespace skivvy::ircbot::chanops;
 //using namespace sookee::ios;
-using namespace sookee::utils;
 
 const str STORE_FILE = "factoid.store.file";
 const str STORE_FILE_DEFAULT = "factoid-store.txt";
@@ -83,6 +84,43 @@ const str FACT_PREG_USER = "factoid.fact.preg.user";
 const str FACT_CHANOPS_USERS = "factoid.fact.chanops.users";
 
 const str FACT_CHANNEL_GROUP = "factoid.channel.group";
+
+// from sookee::ios
+static
+std::istream& getnested(std::istream& is, str& s, char d1, char d2)
+{
+	using std::ws;
+
+	if(is.peek() != d1)
+	{
+		is.setstate(std::ios::failbit);
+		return is;
+	}
+
+	str n;
+	uns d = 0;
+	char c;
+	while(is.get(c))
+	{
+		n.append(1, c);
+		if(c == d1)
+			++d;
+		else if(c == d2)
+			--d;
+		if(!d)
+			break;
+	}
+
+	if(n.empty())
+		is.setstate(std::ios::failbit);
+	else
+	{
+		s = n;
+		is.clear();
+	}
+
+	return is;
+}
 
 FactoidManager::FactoidManager(const str& store_file, const str& index_file)
 : store(store_file)
@@ -259,12 +297,13 @@ str FactoidIrcBotPlugin::get_user(const message& msg)
 	bug_var(chanops);
 	// chanops user | msg.userhost
 
-	if(chanops && chanops->api(ChanopsApi::is_userhost_logged_in, {msg.get_userhost()}).empty())
-	{
-		str_vec r = chanops->api(ChanopsApi::get_userhost_username, {msg.get_userhost()});
-		if(!r.empty())
-			return r[0];
-	}
+	// TODO:Fix this
+//	if(chanops && chanops->api(ChanopsApi::is_userhost_logged_in, {msg.get_userhost()}).empty())
+//	{
+//		str_vec r = chanops->api(ChanopsApi::get_userhost_username, {msg.get_userhost()});
+//		if(!r.empty())
+//			return r[0];
+//	}
 
 	return msg.get_userhost();
 }
@@ -283,8 +322,9 @@ bool FactoidIrcBotPlugin::is_user_valid(const message& msg)
 	for(const str& r: bot.get_vec(FACT_PREG_USER))
 		if(bot.preg_match(r, msg.get_userhost()))
 			return true;
-	if(bot.get(FACT_CHANOPS_USERS, false) && chanops)
-		return !chanops->api(ChanopsApi::is_userhost_logged_in, {msg.get_userhost()}).empty();
+	// FIXME:
+//	if(bot.get(FACT_CHANOPS_USERS, false) && chanops)
+//		return !chanops->api(ChanopsApi::is_userhost_logged_in, {msg.get_userhost()}).empty();
 
 	return false;
 }
@@ -335,7 +375,7 @@ bool FactoidIrcBotPlugin::addgroup(const message& msg, FactoidManager& fm)
 
 	str group;
 	while(sgl(iss >> std::ws, group, ','))
-		groups.insert(trim(group));
+		groups.insert(hol::trim_mute(group));
 
 	if(groups.empty())
 		return reply(msg, "expected groups <group1>, <group2>, etc...");
@@ -364,7 +404,7 @@ bool FactoidIrcBotPlugin::addfact(const message& msg, FactoidManager& fm)
 	// add group
 	str_set groups;
 
-	if(!ios::getnested(iss, topics, '[', ']')) // group
+	if(!getnested(iss, topics, '[', ']')) // group
 		iss.clear();
 	else
 	{
@@ -375,11 +415,11 @@ bool FactoidIrcBotPlugin::addfact(const message& msg, FactoidManager& fm)
 
 		siss iss(list);
 		while(sgl(iss, group, ','))
-			groups.insert(trim(group));
+			groups.insert(hol::trim_mute(group));
 	}
 
 	sgl(iss >> key >> std::ws, fact);
-	if(trim(fact).empty())
+	if(hol::trim_mute(fact).empty())
 		return reply(msg, "Empty fact rejected.", true);
 
 	bug_var(key);
@@ -415,7 +455,7 @@ bool FactoidIrcBotPlugin::delfact(const message& msg, FactoidManager& fm)
 	// add group
 	str_set groups;
 
-	if(!ios::getnested(iss, topics, '[', ']')) // group
+	if(!getnested(iss, topics, '[', ']')) // group
 		iss.clear();
 	else
 	{
@@ -426,7 +466,7 @@ bool FactoidIrcBotPlugin::delfact(const message& msg, FactoidManager& fm)
 
 		siss iss(list);
 		while(sgl(iss, group, ','))
-			groups.insert(trim(group));
+			groups.insert(hol::trim_mute(group));
 	}
 
 	if(!(iss >> key))
@@ -478,14 +518,14 @@ bool FactoidIrcBotPlugin::findfact(const message& msg, FactoidManager& fm)
 		while(sgl(iss, group, ','))
 		{
 			bug_var(group);
-			groups.insert(trim(group));
+			groups.insert(hol::trim_mute(group));
 		}
 	}
 
 	str key_match;
 	sgl(iss, key_match);
 
-	if(trim(key_match).empty())
+	if(hol::trim_mute(key_match).empty())
 		return reply(msg, "Empty key rejected.");
 
 	bug_var(key_match);
@@ -519,7 +559,7 @@ str_vec split_list(const str& list, char delim = ',')
 	siss iss (list);
 	str item;
 	while(sgl(iss, item, delim))
-		split.push_back(trim(item));
+		split.push_back(hol::trim_mute(item));
 
 	return split;
 }
@@ -533,7 +573,7 @@ bool FactoidIrcBotPlugin::findgroup(const message& msg, FactoidManager& fm)
 	siss iss(msg.get_user_params());
 
 	str wild_group;
-	if(!sgl(iss, wild_group) || trim(wild_group).empty())
+	if(!sgl(iss, wild_group) || hol::trim_mute(wild_group).empty())
 		return reply(msg, "expected wildcard group expression", true);
 
 	str_set groups = fm.find_group(wild_group);
@@ -661,17 +701,17 @@ bool FactoidIrcBotPlugin::fact(const message& msg, FactoidManager& fm)
 		while(sgl(iss, group, ','))
 		{
 			bug_var(group);
-			groups.insert(trim(group));
+			groups.insert(hol::trim_mute(group));
 		}
 	}
 
 	str key;
 	sgl(iss, key);
 
-	if(trim(key).empty())
+	if(hol::trim_mute(key).empty())
 		return bot.cmd_error(msg, "Expected: !fact <key>.");
 	else
-		fact(msg, fm, lower(key), groups, get_prefix(msg, IRC_Aqua_Light));
+		fact(msg, fm, hol::lower_mute(key), groups, get_prefix(msg, IRC_Aqua_Light));
 
 	return true;
 }
@@ -699,15 +739,15 @@ bool FactoidIrcBotPlugin::give(const message& msg, FactoidManager& fm)
 		while(sgl(iss, group, ','))
 		{
 			bug_var(group);
-			groups.insert(trim(group));
+			groups.insert(hol::trim_mute(group));
 		}
 	}
 
 	str key;
-	if(!sgl(iss >> std::ws, key) || trim(key).empty())
+	if(!sgl(iss >> std::ws, key) || hol::trim_mute(key).empty())
 		return bot.cmd_error(msg, "Expected: !give <nick> *[group1, group2] <key>.");
 
-	fact(msg, fm, lower(key), groups, nick + ": " + irc::IRC_BOLD + "(" + key + ") - " + irc::IRC_NORMAL);
+	fact(msg, fm, hol::lower_mute(key), groups, nick + ": " + irc::IRC_BOLD + "(" + key + ") - " + irc::IRC_NORMAL);
 
 	return true;
 }
@@ -832,4 +872,6 @@ void FactoidIrcBotPlugin::exit()
 
 // INTERFACE: IrcBotMonitor
 
-}} // skivvy::factoid
+} // factoid
+} // ircbot
+} // skivvy

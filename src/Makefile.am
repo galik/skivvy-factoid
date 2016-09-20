@@ -35,11 +35,25 @@ DEF_FLAGS = \
 GEN_FLAGS = -Wl,-E -Wfatal-errors -Wall -Wextra -Winit-self -ansi -pedantic -pipe -pthread \
 	-I$(top_srcdir)/src/include
 	
-AM_CPPFLAGS = $(SOOKEE_CFLAGS) $(SKIVVY_CFLAGS)
+# Need to have set
+# $(GSL_INCS)   Guideline Support Library
+# $(RNG_INCS)   ranges/v3
+# $(DATE_INCS)  Hinnon's date
+# $(HOL_INCS)
+
+ASIO_LIBS = \
+	$(BOOST_SYSTEM_LIB) \
+	$(BOOST_ASIO_LIB)
+
+STD_INCS = $(GSL_INCS) $(RNG_INCS) $(DATE_INCS) $(HOL_INCS) $(BOOST_CPPFLAGS)
+STD_LIBS = $(STDFS_LIBS) $(ASIO_LIBS)
+
+AM_CPPFLAGS = $(SKIVVY_CFLAGS) $(STD_INCS) $(OPENSSL_CFLAGS)
 AM_CXXFLAGS = $(GEN_FLAGS) $(DEF_FLAGS)
+AM_LDFLAGS = $(BOOST_LDFLAGS)
 
 # -Wl,-E is required for programs that load plugin's
-PLUGIN_FLAGS = -Wl,-E
+PLUGIN_LDFLAGS = -module -avoid-version -Wl,-E
 
 plugin_include_HEADERS = \
 	$(srcdir)/include/skivvy/plugin-factoid.h
@@ -52,8 +66,8 @@ noinst_PROGRAMS = \
 
 # IrcBot plugins
 skivvy_plugin_factoid_la_SOURCES = plugin-factoid.cpp
-skivvy_plugin_factoid_la_LDFLAGS = -module -avoid-version $(PLUGIN_FLAGS)
-skivvy_plugin_factoid_la_LIBADD =  $(SOOKEE_LIBS) $(SKIVVY_LIBS) -L.libs
+skivvy_plugin_factoid_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(AM_LDFLAGS)
+skivvy_plugin_factoid_la_LIBADD = $(SKIVVY_LIBS) $(STD_LIBS) -L.libs
 
 test_SOURCES = test.cpp
 #test_LDFLAGS = -module -avoid-version $(PLUGIN_FLAGS)

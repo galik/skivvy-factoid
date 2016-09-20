@@ -1,6 +1,5 @@
-#pragma once
-#ifndef _SKIVVY_IRCBOT_FACTOID_H_
-#define _SKIVVY_IRCBOT_FACTOID_H_
+#ifndef SKIVVY_IRCBOT_FACTOID_H
+#define SKIVVY_IRCBOT_FACTOID_H
 /*
  * plugin-factoid.h
  *
@@ -9,7 +8,7 @@
  */
 
 /*-----------------------------------------------------------------.
-| Copyright (C) 2013 SooKee oaskivvy@gmail.com               |
+| Copyright (C) 2013 SooKee oaskivvy@gmail.com                     |
 '------------------------------------------------------------------'
 
 This program is free software; you can redistribute it and/or
@@ -37,9 +36,11 @@ http://www.gnu.org/licenses/gpl-2.0.html
 #include <mutex>
 
 #include <skivvy/store.h>
-//#include <skivvy/plugin-chanops.h>
+#include <skivvy/plugin-chanops.h>
 
-namespace skivvy { namespace factoid {
+namespace skivvy {
+namespace ircbot {
+namespace factoid {
 
 using namespace skivvy::utils;
 using namespace skivvy::ircbot;
@@ -174,6 +175,8 @@ public:
 	void exit() override;
 };
 
-}} // skivvy::factoid
+} // factoid
+} // ircbot
+} // skivvy
 
-#endif // _SKIVVY_IRCBOT_FACTOID_H_
+#endif // SKIVVY_IRCBOT_FACTOID_H

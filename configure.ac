@@ -22,6 +22,8 @@
 # '-----------------------------------------------------------------*/
 
 AC_INIT([skivvy-factoid],[0.1],[oaskivvy@gmail.com],[skivvy-factoid])
+AC_CONFIG_AUX_DIR([aux-bits])
+AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_SRCDIR([src/plugin-factoid.cpp])
 AC_CONFIG_HEADERS([config.h])
 
@@ -32,16 +34,14 @@ AM_PROG_LIBTOOL
 
 AC_PROG_CXX
 AC_PROG_INSTALL
+AC_LANG_CPLUSPLUS
 
-AC_LANG(C++)
 AX_CXX_COMPILE_STDCXX_14([noext],[mandatory])
 
-PKG_CHECK_MODULES([SOOKEE], [libsookee])
 PKG_CHECK_MODULES([SKIVVY], [libskivvy])
-#PKG_CHECK_MODULES([PCRECPP], [libpcrecpp])
 
-AC_CONFIG_MACRO_DIR([m4])
+#AX_BOOST_BASE([1.6],, [AC_MSG_ERROR([skivvy needs Boost v1.6, but it was not found in your system])])
+#AX_BOOST_ASIO
 
-AC_LANG_CPLUSPLUS
 AC_CONFIG_FILES([Makefile src/Makefile])
 AC_OUTPUT
