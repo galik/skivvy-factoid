@@ -61,7 +61,7 @@ namespace ircbot {
 namespace factoid {
 
 IRC_BOT_PLUGIN(FactoidIrcBotPlugin);
-PLUGIN_INFO("factoid", "Factoid", "0.1");
+PLUGIN_INFO("factoid", "Factoid", "0.6.0");
 
 using namespace hol::simple_logger;
 using namespace skivvy;
