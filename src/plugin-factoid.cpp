@@ -791,7 +791,7 @@ bool FactoidIrcBotPlugin::initialize()
 	add
 	({
 		"!addfact"
-		, "[<group1>(,<group2>)*]? <key> \"<fact>\" - Display key fact optionally restricted by group(s)."
+		, "[<group1>(,<group2>)*]? <key> \"<fact>\" - Add a key fact optionally restricted by group(s)."
 		, [&](const message& msg){ addfact(msg, select_fm(msg)); }
 	});
 	add
@@ -815,7 +815,7 @@ bool FactoidIrcBotPlugin::initialize()
 	add
 	({
 		"!ff"
-		, "=!findfact."
+		, "=!findfact"
 		, [&](const message& msg){ findfact(msg, select_fm(msg)); }
 	});
 	add
@@ -827,7 +827,7 @@ bool FactoidIrcBotPlugin::initialize()
 	add
 	({
 		"!fg"
-		, "=!findgroup."
+		, "=!findgroup"
 		, [&](const message& msg){ findgroup(msg, select_fm(msg)); }
 	});
 	add
@@ -839,7 +839,7 @@ bool FactoidIrcBotPlugin::initialize()
 	add
 	({
 		"!f"
-		, "=!fact."
+		, "=!fact"
 		, [&](const message& msg){ fact(msg, select_fm(msg)); }
 	});
 	add
