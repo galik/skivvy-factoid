@@ -807,14 +807,11 @@ str_vec FactoidIrcBotPlugin::list_databases()
 	fs::directory_iterator dir{bot.get_data_folder()};
 	fs::directory_iterator end;
 
-	// need to escape forward slashes?
-	str re = "(?:" + db_filename(")(.*?)(?:", "store") + ")";
-	bug_var(re);
-	std::regex e{re};
-	std::smatch m;
+	std::regex e{"(?:" + db_filename(")(.*?)(?:", "store") + ")"};
 
 	str s;
 	str_vec v;
+	std::smatch m;
 	for(; dir != end; ++dir)
 	{
 		s = dir->path().string();
