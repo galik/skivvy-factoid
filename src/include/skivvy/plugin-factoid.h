@@ -49,10 +49,11 @@ using namespace skivvy::ircbot;
 
 class FactoidManager
 {
-	BackupStore store;
-	BackupStore index;
-
 public:
+	using RPtr = FactoidManager*;
+	using UPtr = std::unique_ptr<FactoidManager>;
+	using SPtr = std::shared_ptr<FactoidManager>;
+
 	static const uns noline = uns(-1);
 
 	str error;
@@ -122,6 +123,10 @@ public:
 	 */
 	str_vec get_fact(const str& key, const str_set& groups);
 
+private:
+	str name;
+	BackupStore store;
+	BackupStore index;
 };
 
 class FactoidIrcBotPlugin
@@ -131,12 +136,11 @@ public:
 
 private:
 
-	using FactoidManagerSptr = std::shared_ptr<FactoidManager>;
-
 	IrcBotPluginHandle chanops;
 
 	FactoidManager fm;
-	std::map<str, FactoidManagerSptr> fms; // channel exclusive factoids
+	std::map<str, FactoidManager> fms; // database -> FactoidManager
+	std::map<str, str> dbs; // channel -> database
 
 	FactoidManager& select_fm(const message& msg);
 

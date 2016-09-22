@@ -38,7 +38,6 @@ http://www.gnu.org/licenses/gpl-2.0.html
 
 #include <hol/string_utils.h>
 #include <hol/small_types.h>
-//#include <sookee/ios.h>
 
 #include <skivvy/logrep.h>
 #include <skivvy/irc.h>
@@ -53,8 +52,6 @@ http://www.gnu.org/licenses/gpl-2.0.html
 		oss << msg; \
 		throw std::runtime_error(oss.str()); \
 	}while(0)
-
-#define log(m) LOG::I << m
 
 namespace skivvy {
 namespace ircbot {
@@ -80,10 +77,13 @@ const str INDEX_FILE_DEFAULT = "factoid-index.txt";
 
 const str FACT_USER = "factoid.fact.user";
 const str FACT_WILD_USER = "factoid.fact.wild.user";
-const str FACT_PREG_USER = "factoid.fact.preg.user";
+const str FACT_SREG_USER = "factoid.fact.sreg.user";
 const str FACT_CHANOPS_USERS = "factoid.fact.chanops.users";
 
 const str FACT_CHANNEL_GROUP = "factoid.channel.group";
+
+const str FACT_DATABASE = "factoid.db";
+const str FACT_CHANNEL_DATABASE = "factoid.channel.db";
 
 // from sookee::ios
 static
@@ -319,8 +319,8 @@ bool FactoidIrcBotPlugin::is_user_valid(const message& msg)
 	for(const str& r: bot.get_vec(FACT_WILD_USER))
 		if(bot.wild_match(r, msg.get_userhost()))
 			return true;
-	for(const str& r: bot.get_vec(FACT_PREG_USER))
-		if(bot.preg_match(r, msg.get_userhost()))
+	for(const str& r: bot.get_vec(FACT_SREG_USER))
+		if(bot.sreg_match(r, msg.get_userhost()))
 			return true;
 	// FIXME:
 //	if(bot.get(FACT_CHANOPS_USERS, false) && chanops)
@@ -471,7 +471,7 @@ bool FactoidIrcBotPlugin::delfact(const message& msg, FactoidManager& fm)
 
 	if(!(iss >> key))
 	{
-		log("ERROR: parameters needed");
+		LOG::E << "parameters needed";
 		return true;
 	}
 
@@ -754,37 +754,117 @@ bool FactoidIrcBotPlugin::give(const message& msg, FactoidManager& fm)
 
 FactoidManager& FactoidIrcBotPlugin::select_fm(const message& msg)
 {
-	auto found = fms.find(msg.get_chan());
-	return found != fms.end() ? *found->second : this->fm;
+	BUG_COMMAND(msg);
+
+	auto fount_db = dbs.find(hol::lower_copy(msg.get_chan()));
+
+	if(fount_db == dbs.end())
+		return this->fm;
+
+	bug_var(fount_db->first);
+	bug_var(fount_db->second);
+
+	auto found_fm = fms.find(fount_db->second);
+
+	if(found_fm == fms.end())
+		return this->fm;
+
+	bug_var(found_fm->first);
+
+	return found_fm->second;
 }
 
 // INTERFACE: BasicIrcBotPlugin
 
 bool FactoidIrcBotPlugin::initialize()
 {
-	// {bug: #24} update store to ass user
+	// {bug: #24} update store to add user
 
-	str_set unique_check;
-	for(auto const& channels: bot.get_vec(FACT_CHANNEL_GROUP))
+//	str_set unique_check;
+	// factoid.channel.group: skivvy #skivvy #skivvy1 #skivvy2
+//	for(auto const& channel_group: bot.get_vec(FACT_CHANNEL_GROUP))
+//	{
+//		siss iss(channel_group);
+//		for(str group; iss >> group;) // channel group name
+//		{
+//			hol::lower_mute(group);
+//
+//			LOG::I << "Registering factoid group name: " << group;
+//
+//			if(!unique_check.insert(group).second)
+//			{
+//				LOG::W << "CONFIG: duplicate group name '" << group << "': " << FACT_CHANNEL_GROUP;
+//				continue;
+//			}
+//
+//			auto store_root = group + "-" + bot.get(STORE_FILE, STORE_FILE_DEFAULT);
+//			auto index_root = group + "-" + bot.get(INDEX_FILE, INDEX_FILE_DEFAULT);
+//
+//			auto store_file = bot.getf("none", store_root);
+//			auto index_file = bot.getf("none", index_root);
+//
+//			fms.emplace(
+//				std::piecewise_construct,
+//					std::forward_as_tuple(group),
+//					std::forward_as_tuple(store_file, index_file));
+//
+//			for(str channel; iss >> channel;)
+//			{
+//				LOG::I << "Adding channel: " << channel;
+//				dbs[hol::lower_mute(channel)] = group;
+//			}
+//		}
+//	}
+
+//	str_vec dbs;
+//	for(auto const& db: bot.get_vec(FACT_DATABASE))
+//		dbs.push_back(db);
+
+	//	factoid.db: cpp       // C++ Key Facts Database
+	//	factoid.db: test      // Test Database
+	//	factoid.db: skivvy    // How to use Skivvy
+	//	factoid.db: autotools // Autoconf, Automake, Libtool Database
+	//
+	//	factoid.channel.db: #skivvy skivvy
+	//	factoid.channel.db: #skivvy autotools
+	//	factoid.channel.db: #autotools autotools
+	//	factoid.channel.db: #CppCoreGuidelines cpp
+	//	factoid.channel.db: ##CppCoreGuidelines cpp
+
+	for(auto const& cdb: bot.get_vec(FACT_CHANNEL_DATABASE))
 	{
-		siss iss(channels);
-		str channel;
-		while(iss >> channel)
+		str chan, db;
+		std::stringstream(cdb) >> chan >> db;
+		auto found = dbs.find(hol::trim_mute(chan));
+
+		if(found != dbs.end())
 		{
-			if(!unique_check.insert(channel).second)
-				continue;
+			LOG::W << "Duplicate channel database entry in config: " << chan;
+			continue;
+		}
 
-			auto store_root = channel + "-" + bot.get(STORE_FILE, STORE_FILE_DEFAULT);
-			auto index_root = channel + "-" + bot.get(INDEX_FILE, INDEX_FILE_DEFAULT);
+		hol::trim_mute(db);
+		hol::lower_mute(db);
 
-			auto store_file = bot.getf("none", store_root);
-			auto index_file = bot.getf("none", index_root);
+		auto store_root = db + "-" + bot.get(STORE_FILE, STORE_FILE_DEFAULT);
+		auto index_root = db + "-" + bot.get(INDEX_FILE, INDEX_FILE_DEFAULT);
 
-			fms[channel] = std::make_shared<FactoidManager>(store_file, index_file);
+		auto store_file = bot.getf("none", store_root);
+		auto index_file = bot.getf("none", index_root);
 
-			auto primary = channel;
-			while(iss >> channel)
-				fms.emplace(channel, fms[primary]);
+		try
+		{
+			fms.emplace(std::piecewise_construct,
+					std::forward_as_tuple(db),
+					std::forward_as_tuple(store_file, index_file));
+
+			dbs.emplace(std::piecewise_construct,
+					std::forward_as_tuple(chan),
+					std::forward_as_tuple(db));
+		}
+		catch(std::exception const& e)
+		{
+			LOG::E << "Unable to load factoid database: " << db;
 		}
 	}
 
