@@ -35,9 +35,11 @@ http://www.gnu.org/licenses/gpl-2.0.html
 #include <sstream>
 #include <iostream>
 #include <algorithm>
+#include <experimental/filesystem>
 
 #include <hol/string_utils.h>
 #include <hol/small_types.h>
+#include <hol/random_utils.h> // TODO: random fact
 
 #include <skivvy/logrep.h>
 #include <skivvy/irc.h>
@@ -60,20 +62,31 @@ namespace factoid {
 IRC_BOT_PLUGIN(FactoidIrcBotPlugin);
 PLUGIN_INFO("factoid", "Factoid", "0.6.0");
 
-using namespace hol::simple_logger;
 using namespace skivvy;
 using namespace skivvy::irc;
-using namespace hol::small_types::basic;
 using namespace skivvy::utils;
 using namespace skivvy::ircbot;
 using namespace skivvy::ircbot::chanops;
-//using namespace sookee::ios;
 
-const str STORE_FILE = "factoid.store.file";
-const str STORE_FILE_DEFAULT = "factoid-store.txt";
+using namespace hol::random_utils;
+using namespace hol::simple_logger;
+using namespace hol::small_types::basic;
 
-const str INDEX_FILE = "factoid.index.file";
-const str INDEX_FILE_DEFAULT = "factoid-index.txt";
+namespace fs = std::experimental::filesystem;
+
+const str DATABASE_FILE_PREFIX_KEY = "factoid.db.prefix";
+const str DATABASE_FILE_PREFIX_DEFAULT = "factoid";
+
+const str DATABASE_FILE_SUFFIX_KEY = "factoid.db.suffix";
+const str DATABASE_FILE_SUFFIX_DEFAULT = "db.txt";
+
+const str DATABASE_META_PREFIX_KEY = "[METADATA]";
+
+//const str STORE_FILE = "factoid.store.file";
+//const str STORE_FILE_DEFAULT = "factoid-store.txt";
+//
+//const str INDEX_FILE = "factoid.index.file";
+//const str INDEX_FILE_DEFAULT = "factoid-index.txt";
 
 const str FACT_USER = "factoid.fact.user";
 const str FACT_WILD_USER = "factoid.fact.wild.user";
@@ -285,8 +298,18 @@ FactoidIrcBotPlugin::FactoidIrcBotPlugin(IrcBot& bot)
 //, store(bot.getf(STORE_FILE, STORE_FILE_DEFAULT))
 //, index(bot.getf(INDEX_FILE, INDEX_FILE_DEFAULT))
 , chanops(bot, "chanops")
-, fm(bot.getf(STORE_FILE, STORE_FILE_DEFAULT), bot.getf(INDEX_FILE, INDEX_FILE_DEFAULT))
+, fm(db_filename("default", "store"), db_filename("default", "index"))
 {
+}
+
+str FactoidIrcBotPlugin::db_filename(str const& db, str const& part)
+{
+	auto base =
+		bot.get(DATABASE_FILE_PREFIX_KEY, DATABASE_FILE_PREFIX_DEFAULT)
+		+ "-" + db + "-"
+		+ bot.get(DATABASE_FILE_SUFFIX_KEY, DATABASE_FILE_SUFFIX_DEFAULT)
+		+ "-" + part + ".txt";
+	return bot.getf("none", base);
 }
 
 FactoidIrcBotPlugin::~FactoidIrcBotPlugin() {}
@@ -312,7 +335,7 @@ bool FactoidIrcBotPlugin::is_user_valid(const message& msg)
 {
 //	bug_fun();
 
-	// Manual overrides from config file
+	// Manual overrides in config file
 	for(const str& r: bot.get_vec(FACT_USER))
 		if(r == msg.get_userhost())
 			return true;
@@ -338,6 +361,33 @@ str get_prefix(const message& msg, const str& color)
 		cmd.erase(0, 1); // loose the '!'
 
 	return IRC_BOLD + IRC_COLOR + color + cmd + ": " + IRC_NORMAL;
+}
+
+str get_prefix(const message& msg)
+{
+	str_vec const colors
+	{
+		IRC_Black,
+		IRC_Navy_Blue,
+		IRC_Green,
+		IRC_Red,
+		IRC_Brown,
+		IRC_Purple,
+		IRC_Olive,
+		IRC_Yellow,
+		IRC_Lime_Green,
+		IRC_Teal,
+		IRC_Aqua_Light,
+		IRC_Royal_Blue,
+		IRC_Hot_Pink,
+		IRC_Dark_Gray,
+		IRC_Light_Gray,
+		IRC_White,
+	};
+
+	auto hash = std::hash<str>()(msg.get_user_cmd());
+
+	return get_prefix(msg, colors[hash % colors.size()]);
 }
 
 bool FactoidIrcBotPlugin::reloadfacts(const message& msg, FactoidManager& fm)
@@ -752,6 +802,100 @@ bool FactoidIrcBotPlugin::give(const message& msg, FactoidManager& fm)
 	return true;
 }
 
+str_vec FactoidIrcBotPlugin::list_databases()
+{
+	fs::directory_iterator dir{bot.get_data_folder()};
+	fs::directory_iterator end;
+
+	// need to escape forward slashes?
+	str re = "(?:" + db_filename(")(.*?)(?:", "store") + ")";
+	bug_var(re);
+	std::regex e{re};
+	std::smatch m;
+
+	str s;
+	str_vec v;
+	for(; dir != end; ++dir)
+	{
+		s = dir->path().string();
+		if(!std::regex_match(s, m, e))
+			continue;
+
+		v.push_back(m.str(1));
+	}
+
+	std::sort(v.begin(), v.end());
+
+	return v;
+}
+
+bool FactoidIrcBotPlugin::lsdb(const message& msg)
+{
+	BUG_COMMAND(msg);
+
+	// !lsdb
+
+	if(!is_user_valid(msg))
+		return bot.cmd_error(msg, msg.get_nickname() + " is not authorised to see databases.");
+
+	auto dbs = list_databases();
+
+	bot.fc_reply_pm(msg, get_prefix(msg) + IRC_COLOR + IRC_Black
+		+ "Found " + std::to_string(dbs.size()) + " databases");
+
+	auto i = 0U;
+	for(auto const& db: dbs)
+		bot.fc_reply_pm(msg, get_prefix(msg)
+			+ IRC_BOLD + IRC_COLOR + IRC_Black + std::to_string(++i) + IRC_NORMAL + ": "
+			+ IRC_COLOR + IRC_Dark_Gray + db);
+
+	return true;
+}
+
+bool FactoidIrcBotPlugin::mkdb(const message& msg)
+{
+	BUG_COMMAND(msg);
+
+	// !mkdb <db-name>
+
+	if(!is_user_valid(msg))
+		return bot.cmd_error(msg, msg.get_nickname() + " is not authorised to create databases.");
+
+
+
+	return true;
+}
+
+bool FactoidIrcBotPlugin::mvdb(const message& msg)
+{
+	BUG_COMMAND(msg);
+
+	if(!is_user_valid(msg))
+		return bot.cmd_error(msg, msg.get_nickname() + " is not authorised to rename databases.");
+
+	return true;
+}
+
+bool FactoidIrcBotPlugin::rmdb(const message& msg)
+{
+	BUG_COMMAND(msg);
+
+	if(!is_user_valid(msg))
+		return bot.cmd_error(msg, msg.get_nickname() + " is not authorised to remove databases.");
+
+	return true;
+}
+
+bool FactoidIrcBotPlugin::cdb(const message& msg)
+{
+	BUG_COMMAND(msg);
+
+	if(!is_user_valid(msg))
+		return bot.cmd_error(msg, msg.get_nickname() + " is not authorised to change databases.");
+
+	return true;
+}
+
 FactoidManager& FactoidIrcBotPlugin::select_fm(const message& msg)
 {
 	BUG_COMMAND(msg);
@@ -780,41 +924,6 @@ bool FactoidIrcBotPlugin::initialize()
 {
 	// {bug: #24} update store to add user
 
-//	str_set unique_check;
-	// factoid.channel.group: skivvy #skivvy #skivvy1 #skivvy2
-//	for(auto const& channel_group: bot.get_vec(FACT_CHANNEL_GROUP))
-//	{
-//		siss iss(channel_group);
-//		for(str group; iss >> group;) // channel group name
-//		{
-//			hol::lower_mute(group);
-//
-//			LOG::I << "Registering factoid group name: " << group;
-//
-//			if(!unique_check.insert(group).second)
-//			{
-//				LOG::W << "CONFIG: duplicate group name '" << group << "': " << FACT_CHANNEL_GROUP;
-//				continue;
-//			}
-//
-//			auto store_root = group + "-" + bot.get(STORE_FILE, STORE_FILE_DEFAULT);
-//			auto index_root = group + "-" + bot.get(INDEX_FILE, INDEX_FILE_DEFAULT);
-//
-//			auto store_file = bot.getf("none", store_root);
-//			auto index_file = bot.getf("none", index_root);
-//
-//			fms.emplace(
-//				std::piecewise_construct,
-//					std::forward_as_tuple(group),
-//					std::forward_as_tuple(store_file, index_file));
-//
-//			for(str channel; iss >> channel;)
-//			{
-//				LOG::I << "Adding channel: " << channel;
-//				dbs[hol::lower_mute(channel)] = group;
-//			}
-//		}
-//	}
 
 //	str_vec dbs;
 //	for(auto const& db: bot.get_vec(FACT_DATABASE))
@@ -846,11 +955,8 @@ bool FactoidIrcBotPlugin::initialize()
 		hol::trim_mute(db);
 		hol::lower_mute(db);
 
-		auto store_root = db + "-" + bot.get(STORE_FILE, STORE_FILE_DEFAULT);
-		auto index_root = db + "-" + bot.get(INDEX_FILE, INDEX_FILE_DEFAULT);
-
-		auto store_file = bot.getf("none", store_root);
-		auto index_file = bot.getf("none", index_root);
+		auto store_file = db_filename(db, "store");
+		auto index_file = db_filename(db, "index");
 
 		try
 		{
@@ -868,6 +974,30 @@ bool FactoidIrcBotPlugin::initialize()
 		}
 	}
 
+	add
+	({
+		"!lsdb"
+		, "List available databases."
+		, [&](const message& msg){ lsdb(msg); }
+	});
+	add
+	({
+		"!mkdb"
+		, "<db-name> - Create new databases."
+		, [&](const message& msg){ mkdb(msg); }
+	});
+	add
+	({
+		"!mvdb"
+		, "<db-name> <new-db-name> - Rename database from <db-name> to <new-db-name>."
+		, [&](const message& msg){ mkdb(msg); }
+	});
+	add
+	({
+		"!cdb"
+		, "<db-name> - Change database."
+		, [&](const message& msg){ cdb(msg); }
+	});
 	add
 	({
 		"!addfact"

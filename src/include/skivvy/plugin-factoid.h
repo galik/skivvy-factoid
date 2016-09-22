@@ -38,12 +38,16 @@ http://www.gnu.org/licenses/gpl-2.0.html
 #include <skivvy/store.h>
 #include <skivvy/plugin-chanops.h>
 
+#include <hol/small_types.h>
+
 namespace skivvy {
 namespace ircbot {
 namespace factoid {
 
 using namespace skivvy::utils;
 using namespace skivvy::ircbot;
+using namespace hol::small_types::basic;
+using namespace hol::small_types::string_containers;
 
 // !addfact, !addgroup, !delfact, !fact, !ff, !fg, !findfact, !findgroup, !give, !reloadfacts
 
@@ -142,7 +146,15 @@ private:
 	std::map<str, FactoidManager> fms; // database -> FactoidManager
 	std::map<str, str> dbs; // channel -> database
 
+	str db_filename(str const& db, str const& part);
+	str_vec list_databases();
 	FactoidManager& select_fm(const message& msg);
+
+	bool lsdb(const message& msg);
+	bool mkdb(const message& msg);
+	bool mvdb(const message& msg);
+	bool rmdb(const message& msg);
+	bool  cdb(const message& msg);
 
 	str get_user(const message& msg);
 
