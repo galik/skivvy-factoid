@@ -62,16 +62,24 @@ plugin_library_LTLIBRARIES =  \
 	skivvy-plugin-factoid.la
 	
 noinst_PROGRAMS = \
-	test
+	cpp-core-guidelines-to-factoid-db \
+	test 
 
 # IrcBot plugins
 skivvy_plugin_factoid_la_SOURCES = plugin-factoid.cpp
 skivvy_plugin_factoid_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(AM_LDFLAGS)
 skivvy_plugin_factoid_la_LIBADD = $(SKIVVY_LIBS) $(STD_LIBS) -L.libs
 
+cpp_core_guidelines_to_factoid_db_SOURCES = cpp-core-guidelines-to-factoid-db.cpp
+cpp_core_guidelines_to_factoid_db_LDADD = \
+	$(STD_LIBS) \
+	$(SKIVVY_LIBS) \
+	-L.libs \
+	.libs/skivvy-plugin-factoid.so
+
 test_SOURCES = test.cpp
 #test_LDFLAGS = -module -avoid-version $(PLUGIN_FLAGS)
-test_LDADD =  $(SOOKEE_LIBS) $(SKIVVY_LIBS) -L.libs .libs/skivvy-plugin-factoid.so
+test_LDADD =  $(STD_LIBS) $(SKIVVY_LIBS) -L.libs .libs/skivvy-plugin-factoid.so
 
 plugin_manuals_DATA = $(top_srcdir)/docs/factoid-manual.text
 

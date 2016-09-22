@@ -140,10 +140,24 @@ class FactoidIrcBotPlugin
 : public BasicIrcBotPlugin
 {
 public:
+	FactoidIrcBotPlugin(IrcBot& bot);
+	virtual ~FactoidIrcBotPlugin();
+
+	// INTERFACE: BasicIrcBotPlugin
+
+	bool initialize() override;
+
+	// INTERFACE: IrcBotPlugin
+
+	std::string get_id() const override;
+	std::string get_name() const override;
+	std::string get_version() const override;
+	void exit() override;
 
 private:
 
-	IrcBotPluginHandle chanops;
+//	IrcBotPluginHandle chanops;
+	BackupStore store; // persistant config (overrides config)
 
 	FactoidManager fm;
 	std::map<str, FactoidManager> fms; // database -> FactoidManager
@@ -151,6 +165,8 @@ private:
 
 	str db_filename(str const& db, str const& part);
 	str_vec list_databases();
+	bool validate_db_name(const message& msg, str const& db);
+	bool load_db(str const& db, str const& chan);
 	FactoidManager& select_fm(const message& msg);
 
 	bool lsdb(const message& msg);
@@ -177,21 +193,6 @@ private:
 	bool give(const message& msg, FactoidManager& fm);
 
 	bool reply(const message& msg, const str& text, bool error = false);
-
-public:
-	FactoidIrcBotPlugin(IrcBot& bot);
-	virtual ~FactoidIrcBotPlugin();
-
-	// INTERFACE: BasicIrcBotPlugin
-
-	bool initialize() override;
-
-	// INTERFACE: IrcBotPlugin
-
-	std::string get_id() const override;
-	std::string get_name() const override;
-	std::string get_version() const override;
-	void exit() override;
 };
 
 } // factoid

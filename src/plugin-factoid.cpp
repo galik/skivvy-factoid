@@ -87,8 +87,8 @@ const str METADATA_TITLE_KEY = "Title";
 const str METADATA_CREATED_KEY = "Created";
 const str METADATA_UPDATED_KEY = "Updated";
 
-//const str STORE_FILE = "factoid.store.file";
-//const str STORE_FILE_DEFAULT = "factoid-store.txt";
+const str STORE_FILE = "factoid.store.file";
+const str STORE_FILE_DEFAULT = "factoid-store.txt";
 //
 //const str INDEX_FILE = "factoid.index.file";
 //const str INDEX_FILE_DEFAULT = "factoid-index.txt";
@@ -310,9 +310,7 @@ str_vec FactoidManager::get_fact(const str& key, const str_set& groups)
 
 FactoidIrcBotPlugin::FactoidIrcBotPlugin(IrcBot& bot)
 : BasicIrcBotPlugin(bot)
-//, store(bot.getf(STORE_FILE, STORE_FILE_DEFAULT))
-//, index(bot.getf(INDEX_FILE, INDEX_FILE_DEFAULT))
-, chanops(bot, "chanops")
+, store(bot.get(STORE_FILE, STORE_FILE_DEFAULT))
 , fm(db_filename("default", "store"), db_filename("default", "index"))
 {
 }
@@ -332,7 +330,7 @@ FactoidIrcBotPlugin::~FactoidIrcBotPlugin() {}
 str FactoidIrcBotPlugin::get_user(const message& msg)
 {
 	bug_fun();
-	bug_var(chanops);
+//	bug_var(chanops);
 	// chanops user | msg.userhost
 
 	// TODO:Fix this
@@ -747,34 +745,40 @@ bool FactoidIrcBotPlugin::fact(const message& msg, FactoidManager& fm, const str
 	return true;
 }
 
+//str extract_group_list(str const& params)
+//{
+//	// stuff [g1, g2, g3] other stuff
+//	str s;
+//	sgl(sgl(siss(msg.get_user_params()), s, '['), s, ']');
+//	return s; // "g1, g2, g3"
+//}
+//
+//str_set extract_groups()
+
+template<typename Container, typename T = typename Container::value_type>
+std::set<T> to_set(Container const& c)
+{
+	return{c.begin(), c.end()};
+}
+
 bool FactoidIrcBotPlugin::fact(const message& msg, FactoidManager& fm)
 {
 	BUG_COMMAND(msg);
 
-	// !fact *([group1,group2]) <wildcard>"
-
-	siss iss(msg.get_user_params());
+	// !fact [<group1>(,<group2>)*]? <key>
+	// (\[\w+(,\s*\w+)*\]\s+)?(\w+)
 
 	str_set groups;
-	if(iss.peek() == '[') // groups
+	str key = hol::trim_copy(msg.get_user_params());
+
+	if(auto rv = extract_delimited_text(key, "[", "]", 0))
 	{
-		iss.ignore();
-		str list; // groups
-		sgl(iss, list, ']');
-		siss iss(list);
-		str group;
-		while(sgl(iss, group, ','))
-		{
-			bug_var(group);
-			groups.insert(hol::trim_mute(group));
-		}
+		groups = to_set(hol::split_copy(hol::trim_mute(rv.text), ","));
+		key = hol::trim_copy(key.substr(rv.pos));
 	}
 
-	str key;
-	sgl(iss, key);
-
-	if(hol::trim_mute(key).empty())
-		return bot.cmd_error(msg, "Expected: !fact <key>.");
+	if(key.empty())
+		return bot.cmd_error(msg, "Expected: " + msg.get_user_cmd() + " [<group1>(,<group2>)*]? <key>");
 	else
 		fact(msg, fm, hol::lower_mute(key), groups, get_prefix(msg, IRC_Aqua_Light));
 
@@ -785,13 +789,13 @@ bool FactoidIrcBotPlugin::give(const message& msg, FactoidManager& fm)
 {
 	BUG_COMMAND(msg);
 
-	// !give <nick> *[group1, group2] <key>
+	// !give <nick> [<group1>(,<group2>)*]? <key>
 
 	siss iss(msg.get_user_params());
 
 	str nick;
 	if(!(iss >> nick >> std::ws))
-		return bot.cmd_error(msg, "Expected: !give <nick> *[group1, group2] <key>.");
+		return bot.cmd_error(msg, "Expected: " + msg.get_user_cmd() +  " <nick> [<group1>(,<group2>)*]? <key>");
 
 	str_set groups;
 	if(iss.peek() == '[') // groups
@@ -864,6 +868,19 @@ bool FactoidIrcBotPlugin::lsdb(const message& msg)
 	return true;
 }
 
+bool FactoidIrcBotPlugin::validate_db_name(const message& msg, str const& db)
+{
+	bug_fun();
+	bug_var(db);
+	if(std::count_if(db.begin(), db.end(), [](char c){return !std::isalnum(c);}))
+		return bot.cmd_error(msg, "name: '" + db + "' must contain only alphanumeric charscters");
+
+	if(std::isdigit(db[0]))
+		return bot.cmd_error(msg, "name: '" + db + "' must not begin with a digit");
+
+	return true;
+}
+
 bool FactoidIrcBotPlugin::mkdb(const message& msg)
 {
 	BUG_COMMAND(msg);
@@ -893,11 +910,8 @@ bool FactoidIrcBotPlugin::mkdb(const message& msg)
 
 	// validate name
 
-	if(std::count_if(db.begin(), db.end(), [](char c){return !std::isalnum(c);}))
-		return bot.cmd_error(msg, "name: '" + db + "' must contain only alphanumeric charscters");
-
-	if(std::isdigit(db[0]))
-		return bot.cmd_error(msg, "name: '" + db + "' must not begin with a digit");
+	if(!validate_db_name(msg, db))
+		return false;
 
 	try
 	{
@@ -924,8 +938,80 @@ bool FactoidIrcBotPlugin::mvdb(const message& msg)
 {
 	BUG_COMMAND(msg);
 
+	// !mvdb <db-name|#number> <new-db-name>
+
 	if(!is_user_valid(msg))
 		return bot.cmd_error(msg, msg.get_nickname() + " is not authorised to rename databases.");
+
+	str db;
+	str new_db;
+
+	siss(msg.get_user_params()) >> db >> new_db;
+
+	hol::lower_mute(db);
+	hol::lower_mute(new_db);
+
+	bug_var(db);
+	bug_var(new_db);
+
+	if(db.empty())
+		return bot.cmd_error(msg, msg.get_user_cmd() + " needs the name of #number of a database to rename");
+
+	if(new_db.empty())
+		return bot.cmd_error(msg, msg.get_user_cmd() + " needs a new name for database '" + db + "'");
+
+	{
+		auto dbs = list_databases();
+		if(std::find(dbs.begin(), dbs.end(), db) != dbs.end())
+			return bot.cmd_error(msg, "name: '" + new_db + "' already exists");
+	}
+
+	if(!validate_db_name(msg, new_db))
+		return false;
+
+
+	// remember which channels were pointing to the current db name
+	str_set chans;
+	for(auto const& dbp: dbs)
+		if(dbp.second == db)
+			chans.insert(dbp.first);
+
+	bug_cnt(chans);
+
+	// drop current name for db
+
+	fms.erase(db);
+
+	std::error_code ec;
+
+	// first copy BOTH strre & index files
+
+	fs::copy(db_filename(db, "store"), db_filename(new_db, "store"), ec);
+
+	if(!ec)
+		return bot.cmd_error(msg, "error renaming db from: '" + db + "': " + ec.message());
+
+	fs::copy(db_filename(db, "index"), db_filename(new_db, "index"), ec);
+
+	if(!ec)
+		return bot.cmd_error(msg, "error renaming db from: '" + db + "': " + ec.message());
+
+	// Now delete both
+
+	fs::remove(db_filename(db, "store"), ec);
+
+	if(!ec)
+		return bot.cmd_error(msg, "error renaming db to: '" + new_db + "': " + ec.message());
+
+	fs::remove(db_filename(db, "index"), ec);
+
+	if(!ec)
+		return bot.cmd_error(msg, "error renaming db to: '" + new_db + "': " + ec.message());
+
+	// TODO: reload under new name (add to persistent store override)
+
+	for(auto const& chan: chans)
+		load_db(new_db, chan);
 
 	return true;
 }
@@ -972,6 +1058,43 @@ FactoidManager& FactoidIrcBotPlugin::select_fm(const message& msg)
 	return found_fm->second;
 }
 
+bool FactoidIrcBotPlugin::load_db(str const& db, str const& chan)
+{
+	bug_fun();
+	bug_var(db);
+	bug_var(chan);
+	bug("-----------------------------------------------------");
+	dbs.erase(chan);
+	fms.erase(db);
+
+	auto store_file = db_filename(db, "store");
+	auto index_file = db_filename(db, "index");
+
+	bug_var(store_file);
+	bug_var(index_file);
+
+	try
+	{
+		fms.emplace(std::piecewise_construct,
+				std::forward_as_tuple(db),
+				std::forward_as_tuple(store_file, index_file));
+
+		dbs.emplace(std::piecewise_construct,
+				std::forward_as_tuple(chan),
+				std::forward_as_tuple(db));
+
+		LOG::I << "DB: " << db << " loaded for channel: " << chan;
+
+		store.set(FACT_CHANNEL_DATABASE, chan + " " + db);
+	}
+	catch(std::exception const& e)
+	{
+		LOG::E << "Unable to load factoid database: " << db;
+		return false;
+	}
+	return true;
+}
+
 // INTERFACE: BasicIrcBotPlugin
 
 bool FactoidIrcBotPlugin::initialize()
@@ -982,44 +1105,56 @@ bool FactoidIrcBotPlugin::initialize()
 	//	factoid.channel.db: #CppCoreGuidelines cpp
 	//	factoid.channel.db: ##CppCoreGuidelines cpp
 
-	for(auto const& cdb: bot.get_vec(FACT_CHANNEL_DATABASE))
+	// current config
+	LOG::I << "Loading persistent database config";
+	for(auto const& cdb: store.get_vec(FACT_CHANNEL_DATABASE))
 	{
+		bug_var(cdb);
 		str chan, db;
-		std::stringstream(cdb) >> chan >> db;
-		auto found = dbs.find(hol::trim_mute(chan));
-
-		if(found != dbs.end())
+		if(!(std::stringstream(cdb) >> chan >> db))
 		{
 			LOG::W << "Duplicate channel database entry in config: " << chan;
 			continue;
 		}
 
-		hol::trim_mute(db);
-		hol::lower_mute(db);
+		auto found = dbs.find(hol::trim_mute(chan));
 
-		auto store_file = db_filename(db, "store");
-		auto index_file = db_filename(db, "index");
-
-		try
+		if(found != dbs.end())
 		{
-			fms.emplace(std::piecewise_construct,
-					std::forward_as_tuple(db),
-					std::forward_as_tuple(store_file, index_file));
+			LOG::E << "Duplicate channel database entry in store: " << chan
+				<< ": " << db;
+			continue;
+		}
 
-			dbs.emplace(std::piecewise_construct,
-					std::forward_as_tuple(chan),
-					std::forward_as_tuple(db));
-		}
-		catch(std::exception const& e)
+		load_db(db, chan);
+	}
+
+	LOG::I << "Loading disk based database config";
+	// load from hard config hat does not conflict
+	for(auto const& cdb: bot.get_vec(FACT_CHANNEL_DATABASE))
+	{
+		str chan, db;
+		std::stringstream(cdb) >> chan >> db;
+
+		hol::lower_mute(hol::trim_mute(db));
+		hol::lower_mute(hol::trim_mute(chan));
+
+		auto found = dbs.find(hol::trim_mute(chan));
+
+		if(found != dbs.end() && found->second != db)
 		{
-			LOG::E << "Unable to load factoid database: " << db;
+			LOG::W << "Runtime config overrides config file for channel: " << chan
+				<< ": using db" << found->second;
+			continue;
 		}
+
+		load_db(db, chan);
 	}
 
 	add
 	({
 		"!lsdb"
-		, "List available databases."
+		, "List available databases by their #number (numbers change when dbs are added and removed)."
 		, [&](const message& msg){ lsdb(msg); }
 	});
 	add
@@ -1031,7 +1166,7 @@ bool FactoidIrcBotPlugin::initialize()
 	add
 	({
 		"!mvdb"
-		, "<db-name> <new-db-name> - Rename database from <db-name> to <new-db-name>."
+		, "<db-name|#number> <new-db-name> - Rename database from <db-name> (or number from !lsdb) to <new-db-name>."
 		, [&](const message& msg){ mkdb(msg); }
 	});
 	add
@@ -1097,7 +1232,7 @@ bool FactoidIrcBotPlugin::initialize()
 	add
 	({
 		"!give"
-		, "<nick> <key> - Display fact highlighting <nick>."
+		, "<nick> [<group1>(,<group2>)*]? <key> - Display (optionally group restricted) fact highlighting <nick>."
 		, [&](const message& msg){ give(msg, select_fm(msg)); }
 	});
 	add

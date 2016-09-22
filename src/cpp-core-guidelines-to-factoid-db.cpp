@@ -10,6 +10,7 @@
 
 #include <hol/simple_logger.h>
 #include <hol/small_types.h>
+#include <hol/string_utils.h>
 
 #include "include/skivvy/plugin-factoid.h"
 
@@ -44,7 +45,7 @@ void convert(fs::path const& guide, str const& db)
 	// #2 num
 	// #3 desc
 	// #4 link
-	std::regex e{R"(\*\s+\[([^.]+)\.(\d+):\s+([^]]+)\]\(([^)]+)\))", std::regex_constants::optimize};
+	std::regex e{R"(\*\s+\[([^.]+)\.(\d+):\s+([^\]]+)\]\(#([^)]+)\))", std::regex_constants::optimize};
 	std::smatch m;
 
 	if(auto ifs = std::ifstream(guide, std::ios::binary))
@@ -56,15 +57,20 @@ void convert(fs::path const& guide, str const& db)
 
 			bug_var(line);
 
-			str key = m.str(1) + m.str(2);
-			str fact = m.str(3);
-			str_set groups = {m.str(1)};
+			str key1 = hol::lower_copy(m.str(1) + m.str(2));
+			str key2 = hol::lower_copy(m.str(4));
+			str fact1 = m.str(3);
+			str fact2 = "=" + key1;
+			str group = hol::lower_copy(m.str(1));
 
-			bug_var(key);
-			bug_var(fact);
-			bug_var(*groups.begin());
+			bug_var(key1);
+			bug_var(fact1);
+			bug_var(key2);
+			bug_var(fact2);
+			bug_var(group);
 
-			fm.add_fact(key, fact, groups);
+			fm.add_fact(key1, fact1, {group});
+			fm.add_fact(key2, fact2, {group});
 		}
 
 		return;
