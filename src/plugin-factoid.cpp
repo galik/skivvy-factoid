@@ -40,6 +40,7 @@ http://www.gnu.org/licenses/gpl-2.0.html
 #include <hol/string_utils.h>
 #include <hol/small_types.h>
 #include <hol/random_utils.h> // TODO: random fact
+#include <hol/time_utils.h>
 
 #include <skivvy/logrep.h>
 #include <skivvy/irc.h>
@@ -80,7 +81,11 @@ const str DATABASE_FILE_PREFIX_DEFAULT = "factoid";
 const str DATABASE_FILE_SUFFIX_KEY = "factoid.db.suffix";
 const str DATABASE_FILE_SUFFIX_DEFAULT = "db.txt";
 
-const str DATABASE_META_PREFIX_KEY = "[METADATA]";
+const str DATABASE_META_PREFIX = "[METADATA]";
+
+const str METADATA_TITLE_KEY = "Title";
+const str METADATA_CREATED_KEY = "Created";
+const str METADATA_UPDATED_KEY = "Updated";
 
 //const str STORE_FILE = "factoid.store.file";
 //const str STORE_FILE_DEFAULT = "factoid-store.txt";
@@ -139,6 +144,16 @@ FactoidManager::FactoidManager(const str& store_file, const str& index_file)
 : store(store_file)
 , index(index_file)
 {
+}
+
+void FactoidManager::set_metadata(const str& key, const str& val)
+{
+	store.set(DATABASE_META_PREFIX + "-" + key, val);
+}
+
+str FactoidManager::get_metadata(const str& key, const str& dflt)
+{
+	return store.get(DATABASE_META_PREFIX + "-" + key, dflt);
 }
 
 /**
@@ -853,12 +868,54 @@ bool FactoidIrcBotPlugin::mkdb(const message& msg)
 {
 	BUG_COMMAND(msg);
 
-	// !mkdb <db-name>
+	// !mkdb <db-name> [<title>]?
 
 	if(!is_user_valid(msg))
 		return bot.cmd_error(msg, msg.get_nickname() + " is not authorised to create databases.");
 
+	str db;
+	str title;
 
+	sgl(siss(msg.get_user_params()) >> db >> std::ws, title);
+
+	hol::lower_mute(db);
+	hol::trim_mute(title);
+
+	if(db.empty())
+		return bot.cmd_error(msg, msg.get_user_cmd() + " needs a name");
+
+
+	{
+		auto dbs = list_databases();
+		if(std::find(dbs.begin(), dbs.end(), db) != dbs.end())
+			return bot.cmd_error(msg, "name: '" + db + "' already exists");
+	}
+
+	// validate name
+
+	if(std::count_if(db.begin(), db.end(), [](char c){return !std::isalnum(c);}))
+		return bot.cmd_error(msg, "name: '" + db + "' must contain only alphanumeric charscters");
+
+	if(std::isdigit(db[0]))
+		return bot.cmd_error(msg, "name: '" + db + "' must not begin with a digit");
+
+	try
+	{
+		auto store_file = db_filename(db, "store");
+		auto index_file = db_filename(db, "index");
+
+		FactoidManager fm{store_file, index_file};
+
+		if(!title.empty())
+			fm.set_metadata(METADATA_TITLE_KEY, title);
+
+		fm.set_metadata(METADATA_CREATED_KEY, hol::time_stamp_now());
+		fm.set_metadata(METADATA_UPDATED_KEY, hol::time_stamp_now());
+	}
+	catch(std::exception const& e)
+	{
+		return bot.cmd_error(msg, "Error creating db '" + db + "': " + e.what());
+	}
 
 	return true;
 }
@@ -919,18 +976,6 @@ FactoidManager& FactoidIrcBotPlugin::select_fm(const message& msg)
 
 bool FactoidIrcBotPlugin::initialize()
 {
-	// {bug: #24} update store to add user
-
-
-//	str_vec dbs;
-//	for(auto const& db: bot.get_vec(FACT_DATABASE))
-//		dbs.push_back(db);
-
-	//	factoid.db: cpp       // C++ Key Facts Database
-	//	factoid.db: test      // Test Database
-	//	factoid.db: skivvy    // How to use Skivvy
-	//	factoid.db: autotools // Autoconf, Automake, Libtool Database
-	//
 	//	factoid.channel.db: #skivvy skivvy
 	//	factoid.channel.db: #skivvy autotools
 	//	factoid.channel.db: #autotools autotools
@@ -1060,9 +1105,8 @@ bool FactoidIrcBotPlugin::initialize()
 		"!reloadfacts"
 		, "Reload fact database."
 		, [&](const message& msg){ reloadfacts(msg, select_fm(msg)); }
-//		, action::INVISIBLE
 	});
-//	bot.add_monitor(*this);
+
 	return true;
 }
 

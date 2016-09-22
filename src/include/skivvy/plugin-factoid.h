@@ -74,6 +74,9 @@ public:
 		return true;
 	}
 
+	void set_metadata(const str& key, const str& val);
+	str get_metadata(const str& key, const str& dflt);
+
 	/**
 	 * Add a fact by keyword and optionally add it to groups.
 	 * @param key
