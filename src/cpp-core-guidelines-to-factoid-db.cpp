@@ -41,36 +41,65 @@ void convert(fs::path const& guide, str const& db)
 	// * [P.3: Express intent](#Rp-what)
 	// * [Enum.1: Prefer enumerations over macros](#Renum-macro)
 
-	// #1 group
+	// #1 sec
+	// #2 sec-desc
+	// #3 link
+	std::regex es{R"(\*\s+\[([^:\d\]]+?):\s+([^\]]+?)\]\(#([^)]+?)\))", std::regex_constants::optimize};
+	// #1 sec
 	// #2 num
 	// #3 desc
 	// #4 link
-	std::regex e{R"(\*\s+\[([^.]+)\.(\d+):\s+([^\]]+)\]\(#([^)]+)\))", std::regex_constants::optimize};
+	std::regex er{R"(\*\s+\[([^.]+)\.(\d+):\s+([^\]]+)\]\(#([^)]+)\))", std::regex_constants::optimize};
 	std::smatch m;
 
 	if(auto ifs = std::ifstream(guide, std::ios::binary))
 	{
 		for(str line; sgl(ifs, line);)
 		{
-			if(!std::regex_search(line, m, e))
+			if(std::regex_search(line, m, es))
+			{
+				//	* [In: Introduction](#S-introduction)
+				//	* [P: Philosophy](#S-philosophy)
+				//	* [I: Interfaces](#S-interfaces)
+				//	* [F: Functions](#S-functions)
+				//	* [C: Classes and class hierarchies](#S-class)
+				//	* [Enum: Enumerations](#S-enum)
+				//	* [R: Resource management](#S-resource)
+				//	* [ES: Expressions and statements](#S-expr)
+				//	* [E: Error handling](#S-errors)
+				str sec = "sec";
+//				str key = hol::lower_copy(m.str(1));
+//				str link = hol::lower_copy(m.str(3));
+				str key = m.str(1);
+				str link = m.str(3);
+				str fact = "Section Name: [" + sec + "]: " + hol::lower_copy(m.str(2));
+
+				fm.add_fact(key, fact, {sec});
+			}
+			else if(!std::regex_search(line, m, er))
 				continue;
 
 			bug_var(line);
 
-			str key1 = hol::lower_copy(m.str(1) + m.str(2));
-			str key2 = hol::lower_copy(m.str(4));
-			str fact1 = m.str(3);
+//			str sec = hol::lower_copy(m.str(1));
+//			str key1 = hol::lower_copy(m.str(1) + m.str(2));
+//			str key2 = hol::lower_copy(m.str(4));
+			str sec = m.str(1);
+			str key1 = m.str(1) + m.str(2);
+			str key2 = m.str(4);
+			str fact1 = "[" + key1 + "] " + m.str(3) + " {" + key2 + "}";
 			str fact2 = "=" + key1;
-			str group = hol::lower_copy(m.str(1));
 
+
+
+			bug_var(sec);
 			bug_var(key1);
 			bug_var(fact1);
 			bug_var(key2);
 			bug_var(fact2);
-			bug_var(group);
 
-			fm.add_fact(key1, fact1, {group});
-			fm.add_fact(key2, fact2, {group});
+			fm.add_fact(key1, fact1, {sec});
+			fm.add_fact(key2, fact2, {sec});
 		}
 
 		return;

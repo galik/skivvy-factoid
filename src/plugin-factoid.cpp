@@ -144,6 +144,8 @@ FactoidManager::FactoidManager(const str& store_file, const str& index_file)
 : store(store_file)
 , index(index_file)
 {
+	store.case_insensitive(true);
+	index.case_insensitive(true);
 }
 
 void FactoidManager::set_metadata(const str& key, const str& val)
@@ -256,12 +258,16 @@ str_set FactoidManager::find_fact(const str& wild_key, const str_set& groups)
 	if(groups.empty())
 		return wild_keys;
 
+	str_set ci_groups;
+	for(auto const& g: groups)
+		ci_groups.insert(hol::lower_copy(g));
+
 	str_set keys;
 
 	for(auto&& k: wild_keys)
 	{
 		for(auto&& g: index.get_set(k))
-			if(groups.find(g) != groups.end())
+			if(ci_groups.find(hol::lower_copy(g)) != groups.end())
 				{ keys.insert(k); break; }
 	}
 
@@ -285,7 +291,7 @@ str_set FactoidManager::find_group(const str& wild_group)
 
 	for(auto&& k: keys)
 		for(auto&& g: index.get_set(k))
-			if(wild_match(wild_group, g))
+			if(wild_match(wild_group, g, FNM_CASEFOLD))
 				groups.insert(g);
 
 	return groups;
@@ -296,7 +302,7 @@ bool group_intersect(Container1&& group1, Container2&& group2)
 {
 	for(auto&& g1: group1)
 		for(auto&& g2: group2)
-			if(g1 == g2)
+			if(hol::lower_copy(g1) == hol::lower_copy(g2))
 				return true;
 	return false;
 }
@@ -780,7 +786,8 @@ bool FactoidIrcBotPlugin::fact(const message& msg, FactoidManager& fm)
 	if(key.empty())
 		return bot.cmd_error(msg, "Expected: " + msg.get_user_cmd() + " [<group1>(,<group2>)*]? <key>");
 	else
-		fact(msg, fm, hol::lower_mute(key), groups, get_prefix(msg, IRC_Aqua_Light));
+		fact(msg, fm, key, groups, get_prefix(msg, IRC_Aqua_Light));
+//		fact(msg, fm, hol::lower_mute(key), groups, get_prefix(msg, IRC_Aqua_Light));
 
 	return true;
 }
@@ -1099,6 +1106,8 @@ bool FactoidIrcBotPlugin::load_db(str const& db, str const& chan)
 
 bool FactoidIrcBotPlugin::initialize()
 {
+//	store.case_insensitive(true);
+
 	//	factoid.channel.db: #skivvy skivvy
 	//	factoid.channel.db: #skivvy autotools
 	//	factoid.channel.db: #autotools autotools
