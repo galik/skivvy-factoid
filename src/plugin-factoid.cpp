@@ -39,7 +39,7 @@ http://www.gnu.org/licenses/gpl-2.0.html
 
 #include <hol/string_utils.h>
 #include <hol/small_types.h>
-#include <hol/random_utils.h> // TODO: random fact
+#include <hol/random_numbers.h> // TODO: random fact
 #include <hol/time_utils.h>
 
 #include <skivvy/logrep.h>
@@ -69,9 +69,13 @@ using namespace skivvy::utils;
 using namespace skivvy::ircbot;
 using namespace skivvy::ircbot::chanops;
 
-using namespace hol::random_utils;
-using namespace hol::simple_logger;
-using namespace hol::small_types::basic;
+namespace hol {
+	using namespace header_only_library::random_numbers;
+	using namespace header_only_library::string_utils;
+	using namespace header_only_library::time_utils;
+}
+using namespace header_only_library::simple_logger;
+using namespace header_only_library::small_types::basic;
 
 namespace fs = std::experimental::filesystem;
 
@@ -241,6 +245,7 @@ bool FactoidManager::del_fact(const str& key, uns line, const str_set& groups)
  */
 void FactoidManager::del_from_groups(const str& key, const str_set& groups)
 {
+	// FIXME: make this case-insensitive
 	str_set current_groups = index.get_set(key);
 	for(auto&& g: groups)
 		current_groups.erase(current_groups.find(g));
@@ -779,7 +784,7 @@ bool FactoidIrcBotPlugin::fact(const message& msg, FactoidManager& fm)
 
 	if(auto rv = extract_delimited_text(key, "[", "]", 0))
 	{
-		groups = to_set(hol::split_copy(hol::trim_mute(rv.text), ","));
+		groups = to_set(hol::split_fold(hol::trim_mute(rv.text), ","));
 		key = hol::trim_copy(key.substr(rv.pos));
 	}
 
